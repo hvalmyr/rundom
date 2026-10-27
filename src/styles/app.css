@@ -768,12 +768,10 @@ button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17p
 .facts dd.f-oh { white-space: pre-line; }
 .pitem .pname.go .chev { transform: rotate(-45deg); vertical-align: 1px; }
 
-/* фото мест в тон приложения: приглушённые и тонированные кармином; при наведении — как есть */
-.ph { position: relative; display: block; overflow: hidden; border-radius: 8px; isolation: isolate; }
-.ph img { display: block; border-radius: 0 !important; filter: grayscale(.55) contrast(1.04); transition: filter .25s; }
-.ph::after { content: ''; position: absolute; inset: 0; background: #b0102c; mix-blend-mode: color; opacity: .6; pointer-events: none; transition: opacity .25s; }
+/* фото мест в тон приложения: серые, чуть мягче по контрасту; при наведении — в цвете */
+.ph { position: relative; display: block; overflow: hidden; border-radius: 8px; }
+.ph img { display: block; border-radius: 0 !important; filter: grayscale(1) contrast(.95) brightness(.97); transition: filter .25s; }
 .ph:hover img { filter: none; }
-.ph:hover::after { opacity: 0; }
 .dp-top { display: flex; justify-content: space-between; align-items: center; margin: -4px 0 0; }
 .dp-title { margin: 0; font: 600 18px/24px var(--font-display); }
 /* в панели района действия с местом — каждое своей строкой */
