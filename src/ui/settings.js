@@ -1,6 +1,5 @@
-/* Настройки: тема, подложка, обозначения и резервная копия. */
+/* Настройки: тема, обозначения и резервная копия. */
 import { store, save, BACKUP_APP } from '../storage/store.js';
-import { TILES } from '../map/map.js';
 import { $, el, toast, download, syncSeg } from './dom.js';
 
 const LEGEND = [
@@ -40,11 +39,7 @@ export function initSettings(app) {
   });
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (store.theme === 'auto') app.emit('theme'); });
 
-  const tsel = $('#tileSel');
-  for (const [k, t] of Object.entries(TILES)) tsel.appendChild(el('option', { value: k }, t.name));
-  tsel.value = TILES[store.tiles] ? store.tiles : 'carto';
-  tsel.addEventListener('change', () => { store.tiles = tsel.value; app.setTiles(tsel.value); save(); });
-  app.on('theme', () => app.setTiles(store.tiles));
+  app.on('theme', () => app.setTiles());
 
   const legend = $('#legend');
   for (const [svg, text] of LEGEND) {

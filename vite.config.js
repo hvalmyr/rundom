@@ -3,5 +3,6 @@ import { defineConfig } from 'vite';
 // Relative base so the build works under https://<user>.github.io/rundom/
 export default defineConfig({
   base: './',
-  build: { target: 'es2022' }
+  // MapLibre (~1 MB) lives in its own lazy chunk on purpose
+  build: { target: 'es2022', chunkSizeWarningLimit: 1100 }
 });

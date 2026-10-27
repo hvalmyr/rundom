@@ -1,128 +1,202 @@
 /* Векторная подложка rundom: стиль MapLibre из токенов темы.
-   Данные — OpenFreeMap (схема OpenMapTiles). Подложка и подписи — два стиля:
-   подписи рисуются отдельным слоем поверх линий маршрута, как у «минимальной». */
+   Данные — свои тайлы Москвы (data/moscow.pmtiles, схема rundom, scripts/tiles/process.lua).
+   Одна карта: подложка, затем линии приложения (пройденное, варианты, маршрут), сверху подписи —
+   они не теряются под линией маршрута. Адреса глифов нет: MapLibre рисует подписи сам шрифтом
+   страницы (Inter). */
 
-export const VECTOR_SOURCE = 'https://tiles.openfreemap.org/planet';
-const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
-const FONT = ['Noto Sans Regular'];
-const FONT_BOLD = ['Noto Sans Bold'];
+/* Первое имя задаёт начертание (MapLibre угадывает вес по слову SemiBold), второе — семейство. */
+const FONT = ['Inter'];
+const FONT_BOLD = ['Inter SemiBold', 'Inter'];
 
-/* MapLibre не понимает var() и color-mix(): смешиваем hex-цвета сами. */
-function mix(a, b, t) {
-  const p = (h) => { h = h.replace('#', ''); if (h.length === 3) h = h.replace(/./g, '$&$&'); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); };
-  const A = p(a), B = p(b);
-  return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('');
-}
-
-/* Цвета карты из токенов. v — чтение токена (cssVar из map.js). */
-export function vectorPalette(v, dark) {
-  const ground = v('map-ground'), ink = v('ink'), petrol = v('petrol');
+/* Цвета карты — токены map-* из tokens.css. v — чтение токена (cssVar из map.js). */
+export function vectorPalette(v) {
   return {
-    ground,
-    water: v('petrol-tint'),
-    waterLine: mix(v('petrol-tint'), petrol, 0.25),
-    park: mix(ground, petrol, dark ? 0.1 : 0.07),
-    wood: mix(ground, petrol, dark ? 0.15 : 0.11),
-    landuse: mix(ground, ink, 0.03),
-    building: mix(ground, ink, dark ? 0.1 : 0.07),
-    buildingLine: mix(ground, ink, dark ? 0.16 : 0.13),
-    casing: v('line'),
-    road: dark ? mix(ground, ink, 0.12) : v('surface'),
-    roadMajor: dark ? mix(ground, ink, 0.2) : v('surface'),
-    roadMajorCasing: v('line-strong'),
-    path: v('ink-muted'),
-    rail: v('line-strong'),
-    label: v('ink-muted'),
-    place: ink,
-    waterLabel: mix(petrol, ground, 0.2),
-    halo: ground
+    ground: v('map-ground'),
+    water: v('map-water'),
+    waterLine: v('map-water-line'),
+    park: v('map-park'),
+    wood: v('map-wood'),
+    landuse: v('map-landuse'),
+    building: v('map-building'),
+    buildingLine: v('map-building-line'),
+    casing: v('map-road-casing'),
+    road: v('map-road'),
+    roadMajor: v('map-road-major'),
+    roadMajorCasing: v('map-road-major-casing'),
+    path: v('map-path'),
+    rail: v('map-rail'),
+    lit: v('map-lit'),
+    label: v('map-label'),
+    place: v('map-place'),
+    waterLabel: v('map-water-label'),
+    halo: v('map-ground'),
+    explored: v('map-explored'),
+    route: v('map-route'),
+    alt: v('ink-muted'),
+    paper: v('paper')
   };
 }
 
-const name = ['coalesce', ['get', 'name:ru'], ['get', 'name']];
-const isRoad = (classes) => ['match', ['get', 'class'], classes, true, false];
+const cls = (...classes) => ['match', ['get', 'class'], classes, true, false];
+const not = (k, v) => ['!=', ['get', k], v];
+const is = (k, v) => ['==', ['get', k], v];
+/* run: 1 — генератор строит здесь маршрут, 0 — закрыто для пешехода */
+const closed = is('run', 0);
+/* значение по классу: у класса k — a, у остальных — b */
+const by = (k, a, b) => ['match', ['get', 'class'], k, a, b];
 const MINOR = ['minor', 'service'];
-const MID = ['tertiary', 'secondary'];
-const MAJOR = ['primary', 'trunk', 'motorway'];
-const PATHS = ['path', 'track'];
 /* ширина линии от масштаба: [z, px, z, px, ...] */
 const w = (...stops) => ['interpolate', ['exponential', 1.5], ['zoom'], ...stops];
 
 function baseLayers(c) {
-  const road = (id, classes, color, width, extra = {}) => ({
-    id, type: 'line', source: 'omt', 'source-layer': 'transportation',
-    filter: ['all', isRoad(classes), ['!=', ['get', 'brunnel'], 'tunnel']],
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': color, 'line-width': width },
-    ...extra
+  const src = { source: 'rd', 'source-layer': 'road' };
+  const line = (id, filter, paint, extra = {}) => ({
+    id, type: 'line', ...src, filter,
+    layout: { 'line-cap': 'round', 'line-join': 'round' }, paint, ...extra
   });
+  /* закрытые для пешехода улицы и дорожки — бледнее: бежать по ним генератор не станет */
+  const fade = (o) => ['case', closed, o * 0.35, o];
+  const ground = not('brunnel', 'tunnel');
+  const PATHS = cls('path', 'steps');
   return [
     { id: 'ground', type: 'background', paint: { 'background-color': c.ground } },
-    { id: 'landuse', type: 'fill', source: 'omt', 'source-layer': 'landuse',
-      filter: ['match', ['get', 'class'], ['residential', 'commercial', 'industrial', 'retail'], true, false],
+    { id: 'landuse', type: 'fill', source: 'rd', 'source-layer': 'landuse',
+      filter: cls('residential', 'commercial', 'industrial', 'retail', 'railway', 'garages', 'construction'),
       paint: { 'fill-color': c.landuse } },
-    { id: 'wood', type: 'fill', source: 'omt', 'source-layer': 'landcover',
-      filter: ['match', ['get', 'class'], ['wood', 'forest'], true, false], paint: { 'fill-color': c.wood } },
-    { id: 'grass', type: 'fill', source: 'omt', 'source-layer': 'landcover',
-      filter: ['match', ['get', 'class'], ['grass', 'farmland', 'scrub', 'wetland'], true, false], paint: { 'fill-color': c.park } },
-    { id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park', paint: { 'fill-color': c.park } },
-    { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water',
-      filter: ['!=', ['get', 'brunnel'], 'tunnel'], paint: { 'fill-color': c.water } },
-    { id: 'waterway', type: 'line', source: 'omt', 'source-layer': 'waterway', minzoom: 11,
-      paint: { 'line-color': c.waterLine, 'line-width': w(11, 0.6, 16, 2.5) } },
-    { id: 'building', type: 'fill', source: 'omt', 'source-layer': 'building', minzoom: 13,
+    { id: 'cemetery', type: 'fill', source: 'rd', 'source-layer': 'landuse', filter: is('class', 'cemetery'),
+      paint: { 'fill-color': c.park } },
+    { id: 'wood', type: 'fill', source: 'rd', 'source-layer': 'landcover', filter: is('class', 'wood'),
+      paint: { 'fill-color': c.wood } },
+    { id: 'grass', type: 'fill', source: 'rd', 'source-layer': 'landcover', filter: is('class', 'grass'),
+      paint: { 'fill-color': c.park } },
+    { id: 'park', type: 'fill', source: 'rd', 'source-layer': 'park', paint: { 'fill-color': c.park } },
+    { id: 'water', type: 'fill', source: 'rd', 'source-layer': 'water', paint: { 'fill-color': c.water } },
+    { id: 'waterway', type: 'line', source: 'rd', 'source-layer': 'waterway',
+      paint: { 'line-color': c.waterLine, 'line-width': w(10, by('stream', 0, 0.6), 17, by('stream', 1.5, 3)) } },
+    { id: 'building', type: 'fill', source: 'rd', 'source-layer': 'building', minzoom: 13,
       paint: { 'fill-color': c.building, 'fill-outline-color': c.buildingLine, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 14.5, 1] } },
 
-    road('path', PATHS, c.path, w(14, 0.6, 18, 1.6),
-      { minzoom: 14, paint: { 'line-color': c.path, 'line-width': w(14, 0.6, 18, 1.6), 'line-dasharray': [2, 1.5], 'line-opacity': 0.55 }, layout: { 'line-join': 'round' } }),
-    road('minor-casing', MINOR, c.casing, w(13, 1, 18, 14), { minzoom: 13 }),
-    road('mid-casing', MID, c.casing, w(10, 1.5, 18, 20)),
-    road('major-casing', MAJOR, c.roadMajorCasing, w(8, 1, 18, 26)),
-    road('minor', MINOR, c.road, w(13, 0.5, 18, 11), { minzoom: 12 }),
-    road('mid', MID, c.road, w(10, 0.8, 18, 17)),
-    road('major', MAJOR, c.roadMajor, w(8, 0.8, 18, 22)),
-    { id: 'rail', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 11,
-      filter: ['all', isRoad(['rail', 'transit']), ['!=', ['get', 'brunnel'], 'tunnel']],
-      paint: { 'line-color': c.rail, 'line-width': w(11, 0.5, 18, 2), 'line-dasharray': [3, 2] } }
+    /* подземные переходы и тоннели дорожек — пунктиром поверх домов: по ним тоже бегают */
+    line('path-tunnel', ['all', PATHS, is('brunnel', 'tunnel'), is('run', 1)],
+      { 'line-color': c.path, 'line-width': w(15, 0.8, 18, 2), 'line-dasharray': [1, 1.5], 'line-opacity': 0.4 }, { minzoom: 15, layout: { 'line-join': 'round' } }),
+    /* освещённые дорожки — тёплый ореол под линией: вечером бегут там */
+    line('path-lit', ['all', PATHS, ground, is('lit', 1), is('run', 1)],
+      { 'line-color': c.lit, 'line-width': w(15, 2.5, 18, 7), 'line-opacity': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, 0.5] }, { minzoom: 15 }),
+    /* пешеходные мосты — обводка, как у улиц */
+    line('path-bridge-casing', ['all', PATHS, is('brunnel', 'bridge')],
+      { 'line-color': c.roadMajorCasing, 'line-width': w(14, 3, 18, 8) }, { minzoom: 14 }),
+    line('path-bridge', ['all', PATHS, is('brunnel', 'bridge')],
+      { 'line-color': c.road, 'line-width': w(14, 1.8, 18, 6) }, { minzoom: 14 }),
+    /* асфальтовые дорожки — сплошной линией, грунтовые — пунктиром */
+    line('path', ['all', is('class', 'path'), ground, ['!', ['has', 'unpaved']], ['!', ['has', 'crossing']]],
+      { 'line-color': c.path, 'line-width': w(13, 0.5, 18, 1.8), 'line-opacity': fade(0.6) }, { minzoom: 13 }),
+    line('path-unpaved', ['all', is('class', 'path'), ground, ['has', 'unpaved']],
+      { 'line-color': c.path, 'line-width': w(13, 0.6, 18, 1.8), 'line-dasharray': [2, 1.5], 'line-opacity': fade(0.6) },
+      { minzoom: 13, layout: { 'line-join': 'round' } }),
+    /* лестницы — частые поперечные штрихи */
+    line('steps', ['all', is('class', 'steps'), ground],
+      { 'line-color': c.path, 'line-width': w(14, 2, 18, 5), 'line-dasharray': [0.25, 0.25], 'line-opacity': fade(0.8) },
+      { minzoom: 14, layout: { 'line-join': 'round' } }),
+
+    line('minor-casing', ['all', cls(...MINOR), ground], { 'line-color': c.casing, 'line-width': w(13, 1, 18, 14), 'line-opacity': fade(1) }, { minzoom: 13 }),
+    line('mid-casing', ['all', is('class', 'mid'), ground], { 'line-color': c.casing, 'line-width': w(10, 1.5, 18, 20) }),
+    line('major-casing', ['all', is('class', 'major'), ground], { 'line-color': c.roadMajorCasing, 'line-width': w(8, 1, 18, 26) }),
+    line('minor', ['all', cls(...MINOR), ground], { 'line-color': c.road, 'line-width': w(13, 0.5, 18, 11), 'line-opacity': fade(1) }, { minzoom: 12 }),
+    line('mid', ['all', is('class', 'mid'), ground], { 'line-color': c.road, 'line-width': w(10, 0.8, 18, 17) }),
+    line('major', ['all', is('class', 'major'), ground], { 'line-color': c.roadMajor, 'line-width': w(8, 0.8, 18, 22) }),
+    /* переходы — зебра поверх проезжей части */
+    line('crossing', ['all', is('class', 'path'), ['has', 'crossing']],
+      { 'line-color': c.path, 'line-width': w(15, 2, 18, 7), 'line-dasharray': [0.3, 0.3], 'line-opacity': 0.5 },
+      { minzoom: 15, layout: { 'line-join': 'round' } }),
+    line('rail', ['all', cls('rail', 'tram'), ground],
+      { 'line-color': c.rail, 'line-width': w(10, by('tram', 0.4, 0.5), 18, by('tram', 1.2, 2)), 'line-dasharray': [3, 2] },
+      { layout: {} })
+  ];
+}
+
+/* Линии приложения. Источник у каждой свой, данные задаёт приложение (ov.data). */
+export const OVERLAYS = ['explored', 'alt', 'approach', 'route-halo', 'route'];
+const OVERLAY_SOURCE = { 'route-halo': 'route' };
+export const overlaySource = (id) => 'rd-' + (OVERLAY_SOURCE[id] || id);
+
+function overlayLayers(c) {
+  const line = (id, paint) => ({
+    id, type: 'line', source: overlaySource(id),
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint
+  });
+  return [
+    line('explored', { 'line-color': c.explored, 'line-width': 2.5, 'line-opacity': 0.9 }),
+    line('alt', { 'line-color': c.alt, 'line-width': 3, 'line-opacity': 0.45 }),
+    /* подводка — цепочка точек: штрих почти нулевой длины с круглыми концами */
+    line('approach', { 'line-color': c.route, 'line-width': 3.5, 'line-dasharray': [0.01, 2] }),
+    line('route-halo', { 'line-color': c.paper, 'line-width': 9 }),
+    line('route', { 'line-color': c.route, 'line-width': 5 })
   ];
 }
 
 function labelLayers(c) {
   const halo = { 'text-halo-color': c.halo, 'text-halo-width': 1.4, 'text-halo-blur': 0.4 };
+  const text = (size, extra = {}) => ({ 'text-field': ['get', 'name'], 'text-font': FONT, 'text-size': size, ...extra });
+  const point = ['==', ['geometry-type'], 'Point'];
   return [
-    { id: 'water-name', type: 'symbol', source: 'omt', 'source-layer': 'water_name',
-      filter: ['==', ['geometry-type'], 'Point'],
-      layout: { 'text-field': name, 'text-font': FONT, 'text-size': 12 },
-      paint: { 'text-color': c.waterLabel, ...halo } },
-    { id: 'water-name-line', type: 'symbol', source: 'omt', 'source-layer': 'water_name',
+    /* вода, туалеты и фонтаны: на пробежке их ищут */
+    { id: 'poi', type: 'circle', source: 'rd', 'source-layer': 'poi', minzoom: 15,
+      paint: {
+        'circle-radius': w(15, 3, 18, 5.5),
+        'circle-color': ['match', ['get', 'class'], 'drinking_water', c.waterLabel, 'fountain', c.waterLine, c.label],
+        'circle-stroke-color': c.paper, 'circle-stroke-width': 1.5
+      } },
+    { id: 'poi-label', type: 'symbol', source: 'rd', 'source-layer': 'poi', minzoom: 17,
+      layout: text(10, {
+        'text-field': ['match', ['get', 'class'], 'drinking_water', 'вода', 'fountain', 'фонтан', 'toilets', 'туалет', ''],
+        'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-optional': true
+      }),
+      paint: { 'text-color': c.label, ...halo } },
+    { id: 'water-name', type: 'symbol', source: 'rd', 'source-layer': 'water_name', filter: point,
+      layout: text(12), paint: { 'text-color': c.waterLabel, ...halo } },
+    { id: 'water-name-line', type: 'symbol', source: 'rd', 'source-layer': 'water_name',
       filter: ['==', ['geometry-type'], 'LineString'],
-      layout: { 'text-field': name, 'text-font': FONT, 'text-size': 12, 'symbol-placement': 'line' },
-      paint: { 'text-color': c.waterLabel, ...halo } },
-    { id: 'street-name', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 14,
-      filter: isRoad([...MINOR, ...MID, ...MAJOR, 'pedestrian']),
-      layout: { 'text-field': name, 'text-font': FONT, 'text-size': w(14, 10, 18, 13), 'symbol-placement': 'line', 'text-max-angle': 30 },
+      layout: text(12, { 'symbol-placement': 'line' }), paint: { 'text-color': c.waterLabel, ...halo } },
+    { id: 'park-name', type: 'symbol', source: 'rd', 'source-layer': 'park_name', minzoom: 13,
+      layout: text(w(13, 10, 17, 12), { 'text-max-width': 8 }), paint: { 'text-color': c.label, 'text-opacity': 0.85, ...halo } },
+    { id: 'street-name', type: 'symbol', source: 'rd', 'source-layer': 'road_name', minzoom: 14,
+      layout: text(w(14, 10, 18, 13), { 'symbol-placement': 'line', 'text-max-angle': 30 }),
       paint: { 'text-color': c.label, ...halo } },
-    { id: 'place-minor', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 12,
-      filter: ['match', ['get', 'class'], ['suburb', 'quarter', 'neighbourhood'], true, false],
-      layout: { 'text-field': name, 'text-font': FONT, 'text-size': 12, 'text-transform': 'uppercase', 'text-letter-spacing': 0.08, 'text-max-width': 8 },
+    /* Районы Москвы видны раньше всего остального: по ним ориентируются и выбирают маршрут.
+       Кварталы — только вблизи. Посёлки вокруг Москвы — тихо, мелким серым: они не цель. */
+    { id: 'place-minor', type: 'symbol', source: 'rd', 'source-layer': 'place', minzoom: 11, filter: is('class', 'suburb'),
+      layout: text(w(11, 10, 15, 13), { 'text-transform': 'uppercase', 'text-letter-spacing': 0.08, 'text-max-width': 8 }),
       paint: { 'text-color': c.label, ...halo } },
-    { id: 'place-town', type: 'symbol', source: 'omt', 'source-layer': 'place',
-      filter: ['match', ['get', 'class'], ['town', 'village'], true, false],
-      layout: { 'text-field': name, 'text-font': FONT, 'text-size': 13 },
-      paint: { 'text-color': c.place, ...halo } },
-    { id: 'place-city', type: 'symbol', source: 'omt', 'source-layer': 'place', maxzoom: 13,
-      filter: ['==', ['get', 'class'], 'city'],
-      layout: { 'text-field': name, 'text-font': FONT_BOLD, 'text-size': w(6, 13, 12, 20) },
-      paint: { 'text-color': c.place, ...halo } }
+    { id: 'place-quarter', type: 'symbol', source: 'rd', 'source-layer': 'place', minzoom: 14, filter: cls('quarter', 'neighbourhood'),
+      layout: text(11, { 'text-max-width': 8 }), paint: { 'text-color': c.label, ...halo } },
+    { id: 'place-town', type: 'symbol', source: 'rd', 'source-layer': 'place', minzoom: 10, filter: cls('town', 'village'),
+      layout: text(w(10, 10, 14, 12)), paint: { 'text-color': c.label, 'text-opacity': 0.8, ...halo } },
+    { id: 'place-city', type: 'symbol', source: 'rd', 'source-layer': 'place', maxzoom: 11, filter: is('class', 'city'),
+      layout: text(w(6, 13, 11, 18), { 'text-font': FONT_BOLD }), paint: { 'text-color': c.place, ...halo } }
   ];
 }
 
-const style = (layers) => ({
-  version: 8,
-  glyphs: GLYPHS,
-  sources: { omt: { type: 'vector', url: VECTOR_SOURCE } },
-  layers
-});
+/* Линии [[lat, lon], ...] → GeoJSON; у каждой линии свойство i — её номер. */
+export function linesGeoJSON(lines) {
+  return {
+    type: 'FeatureCollection',
+    features: (lines || []).map((ln, i) => ({
+      type: 'Feature', properties: { i },
+      geometry: { type: 'LineString', coordinates: ln.map((p) => [p[1], p[0]]) }
+    }))
+  };
+}
 
-export const vectorBaseStyle = (c) => style(baseLayers(c));
-export const vectorLabelStyle = (c) => style(labelLayers(c));
+/* rd — источник тайлов (pmtilesSource),
+   ov: { data: {id: lines}, paint: {layerId: {prop: value}}, hidden: {layerId: true} } */
+export function vectorStyle(c, rd, ov) {
+  const sources = { rd };
+  for (const id of OVERLAYS) sources[overlaySource(id)] ||= { type: 'geojson', data: linesGeoJSON(ov.data[overlaySource(id).slice(3)]) };
+  const layers = [...baseLayers(c), ...overlayLayers(c), ...labelLayers(c)];
+  for (const l of layers) {
+    Object.assign(l.paint ||= {}, ov.paint[l.id]);
+    if (ov.hidden[l.id]) (l.layout ||= {}).visibility = 'none';
+  }
+  return { version: 8, sources, layers };
+}

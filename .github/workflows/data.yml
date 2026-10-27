@@ -1,6 +1,6 @@
 name: Data from OpenStreetMap
 
-# Раз в месяц: свежая выгрузка Москвы → районы, улицы, объекты → релиз data-YYYY-MM → деплой сайта.
+# Раз в месяц: свежая выгрузка Москвы → районы, улицы, объекты, тайлы карты → релиз data-YYYY-MM → деплой сайта.
 on:
   schedule:
     - cron: '0 3 2 * *'
@@ -34,6 +34,13 @@ jobs:
         run: gh release download --pattern stats.json --dir prev || echo "no previous data release"
       - name: Build
         run: node --max-old-space-size=6144 scripts/data/build.mjs moscow.osm.pbf public/data
+      - name: Map tiles
+        run: |
+          mkdir -p tm-store
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/w ghcr.io/systemed/tilemaker:master \
+            --input /w/moscow.osm.pbf --output /w/public/data/moscow.pmtiles \
+            --config /w/scripts/tiles/config.json --process /w/scripts/tiles/process.lua --store /w/tm-store
+          ls -l public/data/moscow.pmtiles
       - run: npm test
       - name: Check
         run: node scripts/data/check.mjs public/data/stats.json prev/stats.json | tee report.md; exit ${PIPESTATUS[0]}

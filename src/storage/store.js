@@ -18,7 +18,7 @@ const DEFAULTS = {
   },
   layers: { explored: true, places: true, gates: true, osm: false, covOutline: false, covPlaces: true },
   view: { lat: 55.7558, lon: 37.6173, z: 12 },
-  theme: 'auto', tiles: 'carto'
+  theme: 'auto'
 };
 
 const MERGED = ['prefs', 'layers', 'view'];

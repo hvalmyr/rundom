@@ -98,6 +98,8 @@ export function initDirection(app) {
   const picking = () => app.S.mode === 'districts';
   function renderDistricts() {
     layers.districts.clearLayers();
+    /* у выбранных районов своя подпись: подписи районов с подложки прячем, иначе название двоится */
+    for (const id of ['place-minor', 'place-quarter']) app.gl.visible(id, !(P.dirMode === 'districts' && P.districts.length));
     if (P.dirMode !== 'districts' || !index) return;
     const sel = new Set(P.districts);
     for (const d of index.list) {

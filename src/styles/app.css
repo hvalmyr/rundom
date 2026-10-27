@@ -412,6 +412,7 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .mk-repel::after { content: ""; position: absolute; left: 3px; right: 3px; top: 5px; height: 2px; border-radius: 1px; background: var(--carmine); }
 .mk-rhandle { width: 10px; height: 10px; border-radius: 50%; background: var(--surface); border: 1.5px solid var(--carmine); cursor: ew-resize; }
 .route .edited { grid-column: 1 / -1; color: var(--carmine-strong); font-size: 12px; line-height: 16px; }
+.leaflet-container.pick-alt { cursor: pointer; }
 
 /* ---------- покрытие (вкладка «Прогресс») ---------- */
 #map.cov .leaflet-overlay-pane, #map.cov .leaflet-marker-pane, #map.cov .leaflet-shadow-pane,

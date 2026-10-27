@@ -47,13 +47,7 @@ export function initLibraryPanel(app) {
   }
 
   function renderTracks() {
-    layers.explored.clearLayers();
-    const color = cssVar('map-explored');
-    for (const t of tracks.items) {
-      for (const ln of t.lines) {
-        layers.explored.addLayer(L.polyline(ln, { color, weight: 2.5, opacity: 0.9, lineCap: 'round', lineJoin: 'round', interactive: false }));
-      }
-    }
+    app.gl.lines('explored', tracks.items.flatMap((t) => t.lines));
     const list = $('#exploredList');
     list.innerHTML = '';
     for (const t of tracks.items.slice().reverse()) {

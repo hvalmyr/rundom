@@ -20,7 +20,12 @@ import { initPlaces } from './ui/places.js';
 import { initCoverageMap } from './ui/coverage-map.js';
 import { initSettings } from './ui/settings.js';
 
-const { map, layers, svg, svgTop, setTiles, toggleLayer } = createMap();
+/* офлайн-кэш: только в собранном сайте, в разработке он мешал бы перезагрузке модулей */
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('service worker', e));
+}
+
+const { map, gl, layers, svg, svgTop, setTiles, toggleLayer } = createMap();
 
 const dbError = () => toast('Браузер не даёт сохранить данные. Скачайте копию в настройках.');
 const tracks = collection('tracks', dbError);
@@ -36,7 +41,7 @@ if (store.explored.length) {
 
 const listeners = {};
 const app = {
-  map, layers, svg, svgTop, setTiles, tracks, favorites, tab: 'route',
+  map, gl, layers, svg, svgTop, setTiles, tracks, favorites, tab: 'route',
   S: {
     mode: null, routes: [], sel: -1, net: null, graph: null, graphKey: '', router: null,
     osmPois: [], forced: [], busy: false, abort: null, lastGen: null
@@ -64,7 +69,7 @@ function syncLayers() {
   const ly = store.layers;
   $('#lyExplored').checked = ly.explored; $('#lyPlaces').checked = ly.osm; $('#lyGates').checked = ly.gates;
   $('#showOsm').checked = ly.osm;
-  toggleLayer(layers.explored, ly.explored);
+  gl.visible('explored', ly.explored);
   /* ворот во дворах тысячи: показываем их только вблизи */
   toggleLayer(layers.gates, ly.gates && map.getZoom() >= 16); toggleLayer(layers.closed, ly.gates);
   toggleLayer(layers.osm, ly.osm);

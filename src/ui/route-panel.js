@@ -570,27 +570,45 @@ export function initRoutePanel(app) {
     S.sel = i; renderResults(); drawRoutes(false);
     const r = S.routes[i]; if (r) map.fitBounds(L.latLngBounds(r.coords), { padding: [40, 40] });
   }
+  /* Варианты, кроме выбранного, — серые линии в векторной карте; клик рядом выбирает вариант. */
+  const altIdx = [];
+  map.on('click', (e) => {
+    if (S.mode || !altIdx.length) return;
+    const k = app.gl.pick('alt', e.latlng, 8);
+    if (k !== null) selectRoute(altIdx[k]);
+  });
+  map.on('mousemove', (e) => {
+    if (!altIdx.length) return;
+    map.getContainer().classList.toggle('pick-alt', !S.mode && app.gl.pick('alt', e.latlng, 8) !== null);
+  });
   function drawRoutes(fit) {
-    layers.routes.clearLayers(); layers.km.clearLayers();
-    const muted = cssVar('ink-muted');
-    S.routes.forEach((r, i) => {
-      if (i === S.sel) return;
-      layers.routes.addLayer(L.polyline(r.coords, { color: muted, weight: 3, opacity: 0.45 }).on('click', () => selectRoute(i)));
-    });
+    clearLines();
+    altIdx.length = 0;
+    S.routes.forEach((r, i) => { if (i !== S.sel) altIdx.push(i); });
+    app.gl.lines('alt', altIdx.map((i) => S.routes[i].coords));
     const r = S.routes[S.sel];
     S.routeLayers = r ? drawLine(r, fit) : null;
     if (S.lineId) { S.lineId = null; app.emit('lineShown'); }
     app.emit('routeDrawn');
   }
   /* r: {coords, ringCoords?, approachCoords?} — кольцо сплошной линией, подводка пунктиром из точек */
+  function clearLines() {
+    for (const id of ['alt', 'approach', 'route']) app.gl.lines(id, []);
+    layers.km.clearLayers();
+  }
+  /* Ручка линии в векторной карте: setStyle({weight, opacity}), как у L.Polyline, — её меняет «верёвка». */
+  const glLine = (layerId) => ({
+    setStyle(o) {
+      if (o.weight !== undefined) app.gl.paint(layerId, 'line-width', o.weight);
+      if (o.opacity !== undefined) app.gl.paint(layerId, 'line-opacity', o.opacity);
+    }
+  });
   function drawLine(r, fit) {
-    const route = cssVar('map-route'), paper = cssVar('paper');
     const coords = r.coords, ring = r.ringCoords || coords;
-    const out = {};
-    if (r.approachCoords) layers.routes.addLayer(L.polyline(r.approachCoords, { color: route, weight: 3.5, opacity: 1, dashArray: '0.1 7', interactive: false, lineCap: 'round' }));
-    out.halo = L.polyline(ring, { color: paper, weight: 9, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' });
-    out.line = L.polyline(ring, { color: route, weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' });
-    layers.routes.addLayer(out.halo); layers.routes.addLayer(out.line);
+    app.gl.lines('approach', r.approachCoords ? [r.approachCoords] : []);
+    app.gl.lines('route', [ring]);
+    const out = { halo: glLine('route-halo'), line: glLine('route') };
+    out.halo.setStyle({ opacity: 1 }); out.line.setStyle({ weight: 5, opacity: 1 });
     for (const mk of Core.kmMarkers(coords, store.prefs.kmStep * 1000)) {
       layers.km.addLayer(L.marker([mk.lat, mk.lon], { icon: divIcon('mk-km', 24, 24, Core.fmtKm(mk.km)), interactive: false, keyboard: false }));
     }
@@ -600,13 +618,15 @@ export function initRoutePanel(app) {
   /* Показать сохранённый маршрут: снимает выбор с текущих вариантов. id запоминается в S.lineId. */
   app.showLine = (r, id = null) => {
     S.sel = -1; renderResults();
-    layers.routes.clearLayers(); layers.km.clearLayers();
+    clearLines();
+    altIdx.length = 0;
     drawLine(Array.isArray(r) ? { coords: r } : r, true);
     S.lineId = id;
     S.routeLayers = null; app.emit('routeDrawn');
   };
   app.hideLine = () => {
-    layers.routes.clearLayers(); layers.km.clearLayers();
+    clearLines();
+    altIdx.length = 0;
     S.lineId = null;
     S.routeLayers = null; app.emit('routeDrawn');
   };

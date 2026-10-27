@@ -1,0 +1,32 @@
+{
+  "layers": {
+    "water":      { "minzoom": 8,  "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0001, "simplify_algorithm": "visvalingam" },
+    "waterway":   { "minzoom": 10, "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0001 },
+    "landcover":  { "minzoom": 8,  "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0001, "simplify_algorithm": "visvalingam" },
+    "landuse":    { "minzoom": 8,  "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0001, "simplify_algorithm": "visvalingam" },
+    "park":       { "minzoom": 8,  "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0001, "simplify_algorithm": "visvalingam" },
+    "building":   { "minzoom": 13, "maxzoom": 14 },
+    "road":       { "minzoom": 8,  "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0001 },
+    "road_name":  { "minzoom": 13, "maxzoom": 14 },
+    "place":      { "minzoom": 8,  "maxzoom": 14 },
+    "water_name": { "minzoom": 12, "maxzoom": 14 },
+    "park_name":  { "minzoom": 12, "maxzoom": 14 },
+    "poi":        { "minzoom": 14, "maxzoom": 14 }
+  },
+  "settings": {
+    "minzoom": 8,
+    "maxzoom": 14,
+    "basezoom": 14,
+    "include_ids": false,
+    "combine_below": 14,
+    "name": "rundom Moscow",
+    "version": "1.0",
+    "description": "Подложка rundom: Москва из OpenStreetMap, схема rundom",
+    "compress": "gzip",
+    "filemetadata": {
+      "attribution": "© OpenStreetMap contributors",
+      "type": "baselayer",
+      "format": "pbf"
+    }
+  }
+}
