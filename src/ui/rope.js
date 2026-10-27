@@ -256,7 +256,7 @@ export function initRope(app) {
     try {
       const home = r.apN > 1 || !!o.exits;
       const opts = {
-        ...o, A: start, B: finish, prefer: r.edges, maxAttempts: 450,
+        ...o, A: start, B: finish, prefer: r.edges, avoid: null, maxAttempts: 450,
         /* опорные точки прежнего варианта — первыми кандидатами: форма меняется только там, где тянули */
         keep: r.via || [],
         forced: [...o.forced, ...next.pulls.map((p) => p.node)],

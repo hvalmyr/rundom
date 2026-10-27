@@ -412,7 +412,13 @@ export function initRoutePanel(app) {
         exits, ringStart: ringNode, approachMax: prefs.approachMax, noRepeat: !prefs.allowRepeats,
         prefs: { appeal: prefs.appeal / 100, mainAvoid: prefs.main / 100, novelty: prefs.novelty / 100, poi: prefs.poi / 100 }
       };
+      /* повторное нажатие с теми же настройками — новые кольца: уже показанные варианты идут в конец */
+      const genKey = JSON.stringify([sA.node, sB.node, Lm, prefs.tol, prefs.tolSign, loop, exits, ringNode, forced, direction && direction.label,
+        prefs.approachMax, prefs.allowRepeats, prefs.appeal, prefs.main, prefs.novelty, prefs.poi, nBlocked]);
+      if (S.shown.g !== g || S.shown.key !== genKey) S.shown = { g, key: genKey, edges: [] };
+      S.lastGen.avoid = S.shown.edges;
       const res = await runGenerator(S.lastGen, 4, ac, 0.25);
+      S.shown.edges = [...S.shown.edges, ...res.routes.map((r) => r.edges)].slice(-16);
       S.routes = res.routes;
       S.sel = S.routes.length ? 0 : -1;
       const limits = [nBlocked ? 'тупиков и зон' : '', prefs.allowRepeats ? '' : 'правила без повторов'].filter(Boolean).join(' и ');

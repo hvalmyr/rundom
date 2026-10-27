@@ -45,7 +45,7 @@ const app = {
   map, gl, layers, svg, svgTop, setTiles, tracks, favorites, tab: 'route',
   S: {
     mode: null, routes: [], sel: -1, net: null, graph: null, graphKey: '', router: null,
-    osmPois: [], forced: [], busy: false, abort: null, lastGen: null
+    osmPois: [], forced: [], busy: false, abort: null, lastGen: null, shown: {}
   },
   on(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); },
   emit(ev) { (listeners[ev] || []).forEach((fn) => fn()); }

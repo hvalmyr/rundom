@@ -93,7 +93,9 @@ function scoreRoute(m, prefs, err, overlap) {
    'one' — каждый вариант уходит в один случайный район, 'all' — кольцо проходит через все;
    strict — между первым входом в районы и последним выходом кольцо не покидает их.
    o.prefer — рёбра прежнего маршрута (правка «верёвкой»): по ним идти чуть выгоднее,
-   из найденных берётся самый похожий на прежний. */
+   из найденных берётся самый похожий на прежний.
+   o.avoid — рёбра уже показанных вариантов (повторное построение с теми же настройками):
+   похожие на них опускаются в конец, чтобы каждый раз выходили новые кольца. */
 var DIR_OUT = 0.03, DIR_BACK = 120, DIR_SLACK = 8, DIR_FALLBACK = 0.3;
 function createGenerator(g, o) {
   var rng = mulberry32(o.seed || 1);
@@ -475,9 +477,25 @@ function createGenerator(g, o) {
       }
     });
     pool1.forEach(function (r) { if (r.dirOut) r.score -= 200 * r.dirOut; });
+    if (o.avoid && o.avoid.length) {
+      var seen = o.avoid.map(function (edges) {
+        var m = new Uint8Array(g.E), len = 0;
+        edges.forEach(function (e) { if (!m[e]) { m[e] = 1; len += g.eLen[e]; } });
+        return { mask: m, length: len };
+      });
+      pool1.forEach(function (r) {
+        var worst = 0;
+        seen.forEach(function (sv) { worst = Math.max(worst, similarity(sv, r)); });
+        r.seen = worst;
+        r.score -= 150 * worst;
+      });
+    }
     pool1.sort(function (a, b) {
       var ea = a.err <= tol ? 0 : 1, eb = b.err <= tol ? 0 : 1;
       if (ea !== eb) return ea - eb;
+      /* почти такой же, как уже показанный, — после всех новых */
+      var sa = a.seen > 0.7 ? 1 : 0, sb = b.seen > 0.7 ? 1 : 0;
+      if (sa !== sb) return sa - sb;
       return b.score - a.score;
     });
     var picked = [];
