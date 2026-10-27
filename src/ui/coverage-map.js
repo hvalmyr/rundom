@@ -4,7 +4,8 @@ import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { cssVar } from '../map/map.js';
-import { $, el, fmtKm, syncSeg } from './dom.js';
+import { $, el, fmtKm, fmt1, syncSeg } from './dom.js';
+import { placeMarker, placeSvg } from './place-icons.js';
 
 const CAT = {
   park: 'парк', view: 'смотровая', worship: 'храм', monument: 'памятник', museum: 'музей',
@@ -40,7 +41,7 @@ export function initCoverageMap(app) {
   const G = { base: L.layerGroup(), fill: L.layerGroup(), lines: L.layerGroup(), sel: L.layerGroup(), places: L.layerGroup() };
 
   let active = false, built = false, selected = null, tab = 'streets', sortBy = 'share', streetShown = 60;
-  let placeCat = 'all', placeDist = 'all', placeShown = 40, dCat = 'all';
+  let placeCat = 'all', placeDist = 'all', placeShown = 12, dCat = 'all', distShown = 8, focus = null, segFrom = null;
   const polys = new Map(), stats = new Map();
   const lineCache = new Map();
   let met = new Set(), version = 0, allLoaded = false;
@@ -67,9 +68,9 @@ export function initCoverageMap(app) {
     return [
       ...dist.parks.map((p, i) => {
         const c = p.rings[0].reduce((a, q) => [a[0] + q[0] / p.rings[0].length, a[1] + q[1] / p.rings[0].length], [0, 0]);
-        return { id: dist.id, i, park: true, n: p.n, c: 'park', lat: c[0], lon: c[1], rings: p.rings };
+        return { id: dist.id, i, park: true, n: p.n, c: 'park', lat: c[0], lon: c[1], rings: p.rings, w: p.w };
       }),
-      ...dist.objects.map((o, i) => ({ id: dist.id, i, park: false, n: o.n, c: o.c, lat: o.lat, lon: o.lon, s: o.s }))
+      ...dist.objects.map((o, i) => ({ id: dist.id, i, park: false, n: o.n, c: o.c, lat: o.lat, lon: o.lon, s: o.s, w: o.w }))
     ].map((p) => ({ ...p, st: stateOf(p.id, p.i, p.park, p.c, p.n) }));
   }
 
@@ -93,13 +94,16 @@ export function initCoverageMap(app) {
     }
     built = true;
   }
+  /* заливка кармином по доле пройденного и контур; при выбранном районе остальные приглушены */
   function paintFills() {
     for (const [id, poly] of polys) {
       const p = poly.getElement();
       if (!p) continue;
       const k = stepOf(shareOf(id));
-      p.setAttribute('class', 'leaflet-interactive cov-d ' + (store.layers.covOutline ? 'outline' : k < 0 ? 'empty' : 'cv' + k) + (id === selected ? ' sel' : ''));
+      p.setAttribute('class', 'leaflet-interactive cov-d ' + (k < 0 ? 'empty' : 'cv' + k) +
+        (id === selected ? ' sel' : selected ? ' dim' : ''));
     }
+    if (selected && polys.get(selected)) polys.get(selected).bringToFront();
   }
 
   /* ---------- улицы ---------- */
@@ -148,37 +152,64 @@ export function initCoverageMap(app) {
   }
 
   /* ---------- места на карте ---------- */
+  /* места видимых районов; при выбранном районе — только его, чтобы карта не пестрила */
+  let placesSeq = 0;
   async function drawPlaces() {
+    const my = ++placesSeq;
     G.places.clearLayers();
     if (!store.layers.covPlaces) return;
-    const ids = new Set(inView(PLACES_ZOOM));
-    if (selected) ids.add(selected);
+    const ids = selected ? [selected] : inView(PLACES_ZOOM);
     for (const id of ids) {
       let dist;
       try { dist = await C.district(id); } catch (e) { continue; }
-      if (!active) return;
+      if (!active || my !== placesSeq) return;
       for (const p of placesOf(dist)) {
         if (p.park) {
           G.places.addLayer(L.polygon(p.rings, { renderer: topR, className: 'cov-park st' + p.st, interactive: false }));
         }
-        const m = L.circleMarker([p.lat, p.lon], { renderer: topR, radius: p.park ? 4 : 5, className: 'cov-pl st' + p.st });
-        m.bindPopup(() => placePopup(p));
+        const on = isFocus(p);
+        const m = L.marker([p.lat, p.lon], { icon: placeMarker(p.c, 'st' + p.st + (on ? ' on' : '')), title: p.n, keyboard: false, zIndexOffset: on ? 1000 : 0 });
+        m.bindPopup(() => placePopup(p), { maxWidth: 280, className: 'place-pop' });
+        m.on('popupopen', () => setFocus(p));
+        m.on('popupclose', () => setFocus(null));
         G.places.addLayer(m);
       }
     }
   }
+  /* место в фокусе — то, чья карточка открыта: его значок подсвечен, остальные спокойные */
+  const isFocus = (p) => !!focus && focus.id === p.id && focus.i === p.i && focus.park === p.park;
+  function setFocus(p) {
+    if (p === focus || (p && focus && isFocus(p))) return;
+    focus = p ? { id: p.id, i: p.i, park: p.park } : null;
+    G.places.eachLayer((l) => {
+      const e = l.getElement && l.getElement();
+      if (!e || !l.getLatLng || !e.firstChild || !e.firstChild.classList.contains('mk-place')) return;
+      const ll = l.getLatLng();
+      const hit = !!p && Math.abs(ll.lat - p.lat) < 1e-7 && Math.abs(ll.lng - p.lon) < 1e-7;
+      e.firstChild.classList.toggle('on', hit);
+      l.setZIndexOffset(hit ? 1000 : 0);
+    });
+  }
   function placePopup(p) {
     const key = C.placeKey(p.id, p.c, p.n), st = stateOf(p.id, p.i, p.park, p.c, p.n);
     const fid = 'cov:' + key;
-    return el('div', { class: 'pop' },
+    return el('div', { class: 'pop place' },
+      p.w && p.w.i ? photo(p.w.i) : null,
       el('strong', null, Core.placeName({ name: p.n, cat: p.c })),
       el('div', { class: 'sub' }, [CAT[p.c], STATE[st], p.s].filter(Boolean).join(' · ')),
+      p.w ? el('p', { class: 'desc' }, p.w.t, ' ', el('a', { href: p.w.u, target: '_blank', rel: 'noopener' }, 'Википедия')) : null,
       el('div', { class: 'btns' },
         el('button', { class: 'btn small', type: 'button', onclick: () => { toggleVisited(p); map.closePopup(); } }, st === 2 ? 'Снять отметку' : 'Исследовал'),
         el('button', {
           class: 'btn small', type: 'button',
           onclick: () => { app.toggleForced({ id: fid, name: p.n, lat: p.lat, lon: p.lon }); map.closePopup(); }
         }, app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут')));
+  }
+  /* фото с Commons: автор и лицензия под ним, ссылка на страницу файла */
+  function photo(i) {
+    return el('figure', { class: 'photo' },
+      el('img', { src: i.s, alt: '', loading: 'lazy', decoding: 'async' }),
+      el('figcaption', null, el('a', { href: i.f, target: '_blank', rel: 'noopener' }, i.a + ' · ' + i.l)));
   }
   function toggleVisited(p) {
     const key = C.placeKey(p.id, p.c, p.n);
@@ -189,7 +220,9 @@ export function initCoverageMap(app) {
   function showPlace(p) {
     if (p.id !== selected) select(p.id, false);
     map.setView([p.lat, p.lon], Math.max(map.getZoom(), 16));
-    L.popup().setLatLng([p.lat, p.lon]).setContent(placePopup(p)).openOn(map);
+    setFocus(p);
+    L.popup({ maxWidth: 280, className: 'place-pop' }).setLatLng([p.lat, p.lon]).setContent(placePopup(p))
+      .on('remove', () => setFocus(null)).openOn(map);
     if (app.sheet) app.sheet.peek();
   }
 
@@ -249,7 +282,12 @@ export function initCoverageMap(app) {
       el('button', { type: 'button', 'data-t': 'places' }, 'Места · ' + metN),
       el('button', { type: 'button', 'data-t': 'about' }, 'О районе'));
     seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { tab = b.dataset.t; renderPanel(); } });
-    syncSeg(seg, 't', tab);
+    /* панель перерисовывается целиком: подложка встаёт на прежний раздел и едет к новому */
+    seg.style.setProperty('--i', '0');
+    syncSeg(seg, 't', segFrom || tab);
+    const to = tab;
+    requestAnimationFrame(() => requestAnimationFrame(() => syncSeg(seg, 't', to)));
+    segFrom = tab;
     panel.append(seg);
     const body = el('div', { class: 'dp-body' });
     panel.append(body);
@@ -259,16 +297,17 @@ export function initCoverageMap(app) {
         el('button', { class: 'chip', type: 'button', 'aria-pressed': String(sortBy === k), onclick: () => { sortBy = k; renderPanel(); } }, t)));
       const list = named.slice().sort((a, b) => sortBy === 'name' ? a.n.localeCompare(b.n, 'ru')
         : sortBy === 'len' ? b.len - a.len : (b.done / b.len - a.done / a.len) || b.len - a.len);
-      const rows = el('div', { class: 'srows' }, list.slice(0, streetShown).map((x) =>
-        el('button', { class: 'srow', type: 'button', onclick: () => highlightStreet(dist, x.i) },
-          el('span', { class: 'n' }, x.n), el('span', { class: 'k' }, fmtKm(x.len) + ' км'), el('span', { class: 'p' }, pct(x.done / x.len)))));
+      /* таблица: улица, пройдено из длины, процент; фон строки — петроль по доле пройденного, 10 ступеней */
+      const km = (m) => fmt1(m / 1000);
+      const srow = (tag, attrs, n, done, len) => el(tag, { ...attrs, class: (attrs.class || 'srow') + ' lv' + Math.max(0, stepOf(done / len)) },
+        el('span', { class: 'n' }, n), el('span', { class: 'k' }, km(done) + ' / ' + km(len)), el('span', { class: 'p' }, pct(done / len)));
+      const rows = el('div', { class: 'stable', role: 'table', 'aria-label': 'Улицы района' },
+        el('div', { class: 'shead', role: 'row' }, el('span', null, 'Улица'), el('span', null, 'пройдено, км'), el('span', null, '%')),
+        list.slice(0, streetShown).map((x) => srow('button', { type: 'button', onclick: () => highlightStreet(dist, x.i) }, x.n, x.done, x.len)));
       const un = dist.streets.find((st) => !st.n);
-      if (un && un.len) {
-        const i = dist.streets.indexOf(un);
-        rows.appendChild(el('div', { class: 'srow muted' }, el('span', { class: 'n' }, 'Безымянные дорожки'), el('span', { class: 'k' }, fmtKm(un.len) + ' км'), el('span', { class: 'p' }, pct(s.byStreet[i] / un.len))));
-      }
+      if (un && un.len) rows.appendChild(srow('div', { class: 'srow muted' }, 'Безымянные дорожки', s.byStreet[dist.streets.indexOf(un)], un.len));
       body.append(sorts, rows);
-      if (list.length > streetShown) body.append(el('button', { class: 'btn small', type: 'button', onclick: () => { streetShown = Infinity; renderPanel(); } }, 'Показать все ' + list.length));
+      if (list.length > streetShown) body.append(el('button', { class: 'btn small more-btn', type: 'button', onclick: () => { streetShown = Infinity; renderPanel(); } }, 'Показать все ' + list.length));
     } else if (tab === 'places') {
       body.append(catChips(places, dCat, (c) => { dCat = c; renderPanel(); }));
       const list = places.filter((p) => dCat === 'all' || p.c === dCat).sort(byState);
@@ -279,6 +318,18 @@ export function initCoverageMap(app) {
         body.append(el('p', { class: 'about' }, dist.about.t),
           el('a', { class: 'src', href: dist.about.u, target: '_blank', rel: 'noopener' }, 'Текст: Википедия, CC BY-SA'));
       } else body.append(el('p', { class: 'hint' }, 'Справки о районе нет.'));
+      /* достопримечательности района с описанием: с фото — первыми */
+      const known = places.filter((p) => p.w).sort((a, b) => (!!b.w.i - !!a.w.i) || CAT_ORDER.indexOf(a.c) - CAT_ORDER.indexOf(b.c));
+      if (known.length) {
+        body.append(el('h3', { class: 'dp-sub' }, 'Что посмотреть'),
+          el('div', { class: 'sights' }, known.slice(0, 12).map((p) => el('article', { class: 'sight' },
+            p.w.i ? el('img', { src: p.w.i.s, alt: '', loading: 'lazy', decoding: 'async' }) : el('span', { class: 'sight-ic', html: placeSvg(p.c) }),
+            el('div', null,
+              el('button', { class: 'pname', type: 'button', onclick: () => showPlace(p) }, Core.placeName({ name: p.n, cat: p.c })),
+              el('p', null, p.w.t),
+              el('small', null, el('a', { href: p.w.u, target: '_blank', rel: 'noopener' }, 'Википедия, CC BY-SA'),
+                p.w.i ? [' · фото: ', el('a', { href: p.w.i.f, target: '_blank', rel: 'noopener' }, p.w.i.a + ', ' + p.w.i.l)] : null))))));
+      }
     }
   }
   const byState = (a, b) => (b.st - a.st) || CAT_ORDER.indexOf(a.c) - CAT_ORDER.indexOf(b.c) || a.n.localeCompare(b.n, 'ru');
@@ -290,7 +341,7 @@ export function initCoverageMap(app) {
   }
   function placeRow(p) {
     return el('div', { class: 'prow' },
-      el('span', { class: 'pdot st' + p.st, 'aria-hidden': 'true' }),
+      el('span', { class: 'pic st' + p.st, 'aria-hidden': 'true', html: placeSvg(p.c) }),
       el('button', { class: 'pname', type: 'button', onclick: () => showPlace(p) },
         Core.placeName({ name: p.n, cat: p.c }), el('small', null, CAT[p.c] + ' · ' + STATE[p.st])),
       el('button', { class: 'btn small ghost', type: 'button', onclick: () => toggleVisited(p) }, p.st === 2 ? 'Снять' : 'Исследовал'));
@@ -312,11 +363,19 @@ export function initCoverageMap(app) {
       card('Места', metObj + ' / ' + obTotal.toLocaleString('ru-RU'), 'встречено · ' + (visited.length - vPark) + ' исследовал'),
       card('Парки', metPark + ' / ' + pkTotal, 'встречено · ' + vPark + ' исследовал'));
   }
+  /* районы — свёрнутым списком: длинный список не прячет места ниже */
   function renderDistricts() {
     const list = idx().d.slice().sort((a, b) => (shareOf(b.id) - shareOf(a.id)) || a.n.localeCompare(b.n, 'ru'));
-    $('#covDistricts').replaceChildren(...list.map((d) =>
+    const shown = list.slice(0, distShown);
+    if (selected && !shown.some((d) => d.id === selected)) shown.push(list.find((d) => d.id === selected));
+    $('#covDistricts').replaceChildren(...shown.map((d) =>
       el('button', { class: 'drow' + (d.id === selected ? ' on' : ''), type: 'button', onclick: () => select(d.id) },
-        el('span', { class: 'n' }, d.n), bar(shareOf(d.id)), el('span', { class: 'p' }, pct(shareOf(d.id))))));
+        el('span', { class: 'n' }, d.n), bar(shareOf(d.id)), el('span', { class: 'p' }, pct(shareOf(d.id))))),
+    list.length > distShown + 1
+      ? el('button', { class: 'btn small more-btn', type: 'button', onclick: () => { distShown = distShown > 8 ? 8 : Infinity; renderDistricts(); } },
+        distShown > 8 ? 'Свернуть' : 'Все районы · ' + list.length)
+      : '');
+    $('#distCount').textContent = list.length;
   }
   async function renderPlaceList() {
     const box = $('#covPlaces');
@@ -329,13 +388,13 @@ export function initCoverageMap(app) {
     const all = dists.flatMap(placesOf);
     const list = all.filter((p) => placeCat === 'all' || p.c === placeCat).sort(byState);
     box.replaceChildren(
-      catChips(all, placeCat, (c) => { placeCat = c; placeShown = 40; renderPlaceList(); }),
+      catChips(all, placeCat, (c) => { placeCat = c; placeShown = 12; renderPlaceList(); }),
       el('div', { class: 'plist' }, list.slice(0, placeShown).map((p) => {
         const row = placeRow(p);
         if (placeDist === 'all') row.querySelector('small').append(' · ' + info(p.id).n);
         return row;
       })),
-      list.length > placeShown ? el('button', { class: 'btn small', type: 'button', onclick: () => { placeShown += 80; renderPlaceList(); } }, 'Показать ещё') : '',
+      list.length > placeShown ? el('button', { class: 'btn small more-btn', type: 'button', onclick: () => { placeShown += 40; renderPlaceList(); } }, 'Показать ещё') : '',
       allLoaded ? '' : el('p', { class: 'hint' }, 'Загружаем места всех районов…'));
   }
   /* файлы районов: уже разобранные, без ожидания */
@@ -361,7 +420,7 @@ export function initCoverageMap(app) {
       ...idx().d.slice().sort((a, b) => a.n.localeCompare(b.n, 'ru')).map((d) => el('option', { value: String(d.id) }, d.n)));
     sel.value = placeDist;
   }
-  $('#placeDist').addEventListener('change', (e) => { placeDist = e.target.value; placeShown = 40; renderPlaceList(); });
+  $('#placeDist').addEventListener('change', (e) => { placeDist = e.target.value; placeShown = 12; renderPlaceList(); });
 
   function renderAll(redrawStreets = true) {
     if (!active) { renderPanel(); return; }
@@ -371,8 +430,7 @@ export function initCoverageMap(app) {
   }
 
   /* ---------- переключатели ---------- */
-  const syncChecks = () => { $('#covOutline').checked = store.layers.covOutline; $('#covPlacesOn').checked = store.layers.covPlaces; };
-  $('#covOutline').addEventListener('change', (e) => { store.layers.covOutline = e.target.checked; save(); paintFills(); });
+  const syncChecks = () => { $('#covPlacesOn').checked = store.layers.covPlaces; };
   $('#covPlacesOn').addEventListener('change', (e) => { store.layers.covPlaces = e.target.checked; save(); drawPlaces(); });
   $('#covLegend').replaceChildren(...[...Array(10)].map((_, k) => el('span', { class: 'cv' + k, title: k * 10 + '–' + (k + 1) * 10 + '%' })));
 

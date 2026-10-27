@@ -4,7 +4,7 @@ import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { overpass } from '../data/overpass.js';
-import { divIcon } from '../map/map.js';
+import { placeMarker } from './place-icons.js';
 import { $, el } from './dom.js';
 
 const CATS = {
@@ -27,7 +27,7 @@ export function initPlaces(app) {
     const b = map.getBounds().pad(0.2);
     const shown = S.osmPois.filter((p) => b.contains([p.lat, p.lon]) || app.isForced(p.id)).slice(0, MAX_SHOWN);
     for (const p of shown) {
-      const m = L.marker([p.lat, p.lon], { icon: divIcon('mk-poi' + (app.isForced(p.id) ? ' via' : ''), 16, 16), title: p.name });
+      const m = L.marker([p.lat, p.lon], { icon: placeMarker(p.cat, app.isForced(p.id) ? 'via' : ''), title: p.name });
       m.bindPopup(() => el('div', { class: 'pop' },
         el('strong', null, p.name ? Core.placeName(p) : 'Без названия'),
         el('div', { class: 'sub' }, CATS[p.cat] || CATS.other),

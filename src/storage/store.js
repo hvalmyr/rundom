@@ -16,7 +16,7 @@ const DEFAULTS = {
     dirMode: 'any', dirBearing: 0, dirSpread: 30, districts: [], distStrict: false, distMulti: 'one',
     main: 60, appeal: 40, novelty: 0, poi: 50, avoidSteps: true, strictGates: false, kmStep: 1, pace: '6:00'
   },
-  layers: { explored: true, places: true, gates: true, osm: false, covOutline: false, covPlaces: true, legendOpen: false },
+  layers: { explored: true, places: true, gates: true, osm: false, covPlaces: true, legendOpen: false },
   view: { lat: 55.7558, lon: 37.6173, z: 12 },
   theme: 'auto'
 };
