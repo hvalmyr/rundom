@@ -74,7 +74,7 @@ export function initRope(app) {
           class: 'btn small', type: 'button', onclick: () => {
             map.closePopup();
             store.zones.push({ id: uid(), name: 'Зона ' + (store.zones.length + 1), shape: 'circle', c: c.c, r: c.r, on: true });
-            save(); app.renderBlocks(); toast('Круг сохранён в «Закрытия и зоны».');
+            save(); app.renderBlocks(); toast('Круг сохранён в «Тупики и зоны».');
           }
         }, 'Сохранить как зону')));
       rope.addLayer(circle); rope.addLayer(center); rope.addLayer(handle);
@@ -241,7 +241,7 @@ export function initRope(app) {
     /* честная проверка: через новую точку кольцо может стать длиннее заданного */
     for (const p of next.pulls) {
       const a = R.route(cost, start, p.node, null, 1), b = R.route(cost, p.node, finish, null, 1);
-      if (!a || !b) { app.say('До этой точки нет пути без закрытий и зон. Правка не применена.', 'warn'); render(); return; }
+      if (!a || !b) { app.say('До этой точки нет пути в обход тупиков и зон. Правка не применена.', 'warn'); render(); return; }
       const min = len(a) + len(b) + 2 * (r.approach || 0);
       if (min > o.length * (1 + o.tol)) {
         app.say('Через эту точку кольцо не короче ' + app.fmtKm(min) + ' км. Уберите точку или увеличьте дистанцию.', 'warn');

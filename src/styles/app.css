@@ -12,8 +12,11 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 button, input, select { font: inherit; color: inherit; }
-:root { --control-h: 36px; } /* единая высота кнопок, полей и списков */
+:root { --control-h: 36px; --focus: var(--carmine); } /* единая высота кнопок, полей и списков; фокус — яркий кармин */
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* фокус с клавиатуры нужен только у элементов управления: карта, её слои и подписи его не рисуют */
+:focus:not(:focus-visible), .leaflet-container:focus-visible, .leaflet-marker-pane :focus-visible, .leaflet-overlay-pane :focus-visible, .maplibregl-canvas:focus-visible,
+.panel:focus-visible, .tabpane:focus-visible, dialog:focus-visible { outline: none; }
 svg { flex: none; }
 .num, .coord, output, .stat { font-variant-numeric: tabular-nums; }
 .muted { color: var(--ink-muted); }
@@ -36,7 +39,7 @@ svg { flex: none; }
   border-bottom: 1px solid var(--line);
   min-height: 52px;
 }
-.wordmark { grid-area: mark; font: 700 28px/1 var(--font-display); letter-spacing: -0.03em; }
+.wordmark { grid-area: mark; font: 700 36px/1 var(--font-display); letter-spacing: -0.035em; }
 .top > #settingsBtn { grid-area: tools; justify-self: end; }
 .tabs { grid-area: tabs; display: flex; gap: var(--space-4); min-width: 0; align-self: stretch; }
 .tabs button {
@@ -74,7 +77,7 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
 .iconbtn:hover { border-color: var(--ink); }
 .iconbtn.ghost { background: none; border-color: transparent; color: var(--ink-muted); }
 .iconbtn.ghost:hover { color: var(--ink); }
-.iconbtn[aria-pressed="true"] { background: var(--carmine-tint); border-color: var(--carmine); color: var(--carmine-strong); }
+.iconbtn[aria-pressed="true"] { background: var(--carmine); border-color: var(--carmine); color: var(--on-carmine); }
 
 /* ---------- кнопки ---------- */
 .btn {
@@ -85,7 +88,7 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
 .btn:hover { border-color: var(--ink); }
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .btn.primary:hover { background: var(--action-strong); border-color: var(--action-strong); color: var(--on-action); }
-.btn.primary:focus-visible { outline-color: var(--ink); }
+.btn.primary:focus-visible { background: var(--action); border-color: var(--action); color: var(--on-action); }
 /* own в покое — белая, как обычная; кармином заливается при наведении и фокусе */
 .btn.own:hover, .btn.own:focus-visible { background: var(--action); border-color: var(--action); color: var(--on-action); }
 .btn.own:active { background: var(--action-strong); border-color: var(--action-strong); }
@@ -113,7 +116,8 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
   font-weight: 500; font-size: 13px; line-height: 18px; font-variant-numeric: tabular-nums;
 }
 #kmChips .chip::after, .kmin::after { content: "00,0"; height: 0; visibility: hidden; overflow: hidden; }
-.chip[aria-pressed="true"] { background: var(--action-tint); border-color: var(--action); color: var(--action-strong); }
+.chip[aria-pressed="true"] { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.chip[aria-pressed="true"]:hover { background: var(--action-strong); border-color: var(--action-strong); }
 .chip.target { background: var(--carmine-tint); border-color: var(--carmine); color: var(--carmine-strong); }
 .chip.add { position: relative; border-color: transparent; color: var(--ink-muted); }
 /* пунктир с длинным штрихом 6/4: у border-style: dashed длину штриха не задать, рисуем маской в цвет токена */
@@ -131,14 +135,24 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
 }
 .kmin input::placeholder { color: var(--ink-muted); }
 
-.seg { display: flex; padding: 2px; gap: 2px; border-radius: var(--radius-pill); background: var(--surface-sunk); }
+/* Таблетки: кнопки равной ширины, выделение — подложка, которая плавно едет к нажатой (--i из syncSeg). */
+.seg { --n: 1; --i: 0; display: flex; padding: 2px; gap: 2px; border-radius: var(--radius-pill); background: var(--surface-sunk); position: relative; isolation: isolate; }
+.seg::before {
+  content: ""; position: absolute; z-index: -1; top: 2px; bottom: 2px; border-radius: var(--radius-pill);
+  width: calc((100% - 4px - (var(--n) - 1) * 2px) / var(--n));
+  left: calc(2px + var(--i) * ((100% - 4px - (var(--n) - 1) * 2px) / var(--n) + 2px));
+  background: var(--surface); box-shadow: 0 0 0 1px var(--line-strong);
+  transition: left .28s cubic-bezier(.3, .7, .2, 1);
+}
+.seg.none::before { opacity: 0; }
+.seg.still::before { transition: none; }
 .seg button {
   border: 0; background: transparent; color: var(--ink-muted); padding: 4px 12px; border-radius: var(--radius-pill);
   font-weight: 500; font-size: 13px; line-height: 18px; cursor: pointer; font-variant-numeric: tabular-nums;
+  flex: 1 1 0; min-width: 0; transition: color .2s;
 }
 .seg button:hover { color: var(--ink); }
-.seg button { flex: 1 1 0; }
-.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line-strong); }
+.seg button[aria-pressed="true"] { color: var(--ink); }
 
 .check { display: flex; align-items: flex-start; gap: var(--space-2); cursor: pointer; }
 .check input { margin-top: 3px; accent-color: var(--petrol); }
@@ -146,6 +160,10 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
 
 details.more { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 details.more summary { cursor: pointer; padding: 10px 0; font-weight: 500; list-style: none; display: flex; justify-content: space-between; }
+details.more summary .count:not(:empty) {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: var(--radius-pill);
+  background: var(--surface-sunk); color: var(--ink-muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; vertical-align: 1px;
+}
 details.more summary::-webkit-details-marker { display: none; }
 details.more summary::after { content: "+"; color: var(--ink-muted); }
 details.more[open] summary::after { content: "−"; }
@@ -167,18 +185,26 @@ details.more[open] summary::after { content: "−"; }
 .status.warn { color: var(--danger); }
 .status.warn::before { content: "! "; font-weight: 700; }
 
-/* ---------- плетение (прогресс) ---------- */
+/* ---------- прогресс: полоса растёт с этапами, по ней бегут косые штрихи ---------- */
 .progress[hidden] { display: none; }
-.braid { display: block; width: 100%; height: 18px; overflow: visible; }
-.braid path { fill: none; stroke-width: 3; stroke-linecap: round; }
-.braid .track { stroke: var(--surface-sunk); }
-.braid .a { stroke: var(--petrol); stroke-dasharray: 30 10; }
-.braid .b { stroke: var(--carmine); stroke-dasharray: 30 10; }
-@media (prefers-reduced-motion: no-preference) {
-  .braid .a, .braid .b { animation: tie 1.6s cubic-bezier(.6, 0, .3, 1) infinite; }
-  .braid .b { animation-delay: -.8s; }
+.braid { position: relative; height: 6px; border-radius: var(--radius-pill); background: var(--surface-sunk); overflow: hidden; }
+.braid .fill {
+  position: absolute; inset: 0 auto 0 0; width: 4%; border-radius: inherit; background-color: var(--carmine);
+  background-image: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--paper) 35%, transparent) 6px 12px);
+  background-size: 17px 100%;
+  transition: width .5s cubic-bezier(.3, .7, .2, 1);
 }
-@keyframes tie { to { stroke-dashoffset: -40; } }
+/* пока долго ждём сеть, полоса не стоит: по пустой части дорожки бежит блик */
+.braid.wait::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 30%; border-radius: inherit;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--carmine) 45%, transparent), transparent);
+  animation: braid-wait 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .braid .fill { animation: braid-run .6s linear infinite; }
+}
+@keyframes braid-run { to { background-position: 17px 0; } }
+@keyframes braid-wait { from { left: -30%; } to { left: 100%; } }
 
 /* ---------- карточки маршрутов ---------- */
 .results { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -192,17 +218,18 @@ details.more[open] summary::after { content: "−"; }
 .route .figs { grid-column: 1 / -1; display: flex; gap: var(--space-3); font-weight: 500; font-variant-numeric: tabular-nums; }
 .route .meta { grid-column: 1 / -1; color: var(--ink-muted); font-size: 12px; line-height: 16px; }
 .route .note { grid-column: 1 / -1; color: var(--danger); font-size: 12px; line-height: 16px; }
-.route .actions { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin-top: var(--space-2); }
+.route .actions { grid-column: 1 / -1; display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 .route .len { font: 600 15px/20px var(--font-display); font-variant-numeric: tabular-nums; }
 
-.star {
-  grid-row: 1; grid-column: 2; width: 32px; height: 32px; margin: -6px -6px 0 0; padding: 0;
-  display: grid; place-items: center; border: 0; background: none; color: var(--ink-muted); cursor: pointer;
-}
-.star:hover { color: var(--ink); }
-.star svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
-.star[aria-pressed="true"] { color: var(--action); }
-.star[aria-pressed="true"] svg { fill: currentColor; }
+.iconbtn.star[aria-pressed="true"] { background: var(--surface); border-color: var(--carmine); color: var(--carmine); }
+.iconbtn.star[aria-pressed="true"] svg { fill: currentColor; }
+.star-mark { grid-row: 1; grid-column: 2; color: var(--carmine); display: grid; place-items: center; }
+.star-mark svg { width: 16px; height: 16px; fill: currentColor; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+/* удаление в два нажатия: крестик становится кнопкой «Удалить?» */
+.iconbtn.confirm { width: auto; padding: 0 10px; background: var(--carmine); border-color: var(--carmine); color: var(--on-carmine); font-size: 13px; font-weight: 600; }
+.iconbtn.confirm:hover { background: var(--carmine-strong); border-color: var(--carmine-strong); color: var(--on-carmine); }
+.btn.more-btn { width: 100%; margin-top: var(--space-2); }
+h2.sec .count:not(:empty) { margin-left: 4px; color: var(--ink-muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 
 /* ---------- итог импорта ---------- */
 .summary { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
@@ -234,6 +261,13 @@ details.more[open] summary::after { content: "−"; }
 .show-dot::before { content: ""; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-strong); box-sizing: border-box; transition: background .15s, border-color .15s; }
 .show-dot:hover::before { border-color: var(--map-route); }
 .show-dot[aria-pressed="true"]::before { background: var(--map-route); border-color: var(--map-route); box-shadow: inset 0 0 0 3px var(--surface); }
+/* библиотека: строки в одну линию — имя и сводка рядом, без лишней высоты */
+.item.lib { padding: 6px 0; }
+.item.lib .grow { display: flex; flex-direction: column; }
+.item.lib .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item.lib.on .rename { color: var(--carmine-strong); }
+.item.lib .iconbtn { width: 32px; height: 32px; }
+.item.lib .iconbtn.confirm { width: auto; }
 
 /* настройка в строке: подпись слева, поле фиксированной ширины справа */
 .setting { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
@@ -244,6 +278,17 @@ details.more[open] summary::after { content: "−"; }
 .unit:focus-within { border-color: var(--focus); }
 .unit input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 0; outline: none; height: 100%; font: inherit; }
 .unit span { flex: none; color: var(--ink-muted); }
+.lbl-inline { color: var(--ink); }
+.stepper { display: flex; align-items: center; gap: 4px; flex: none; }
+.stepper .unit { width: 92px; }
+.stepper .unit input { text-align: center; }
+.step {
+  width: 30px; height: var(--control-h); flex: none; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink); cursor: pointer; font-size: 16px; line-height: 1; padding: 0;
+}
+.step:hover { border-color: var(--carmine); color: var(--carmine); }
+.setting input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.setting input[type="number"]::-webkit-inner-spin-button, .setting input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .stats-head { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
 .stat { font: 600 28px/32px var(--font-display); letter-spacing: -0.01em; color: var(--petrol); }
 .hidden-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -254,9 +299,19 @@ details.more[open] summary::after { content: "−"; }
 #map.picking, #map.picking .leaflet-grab { cursor: crosshair; }
 .maptools {
   position: absolute; top: 12px; right: 12px; z-index: 500; background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius-md); padding: 8px 10px; box-shadow: var(--shadow-float);
-  display: flex; flex-direction: column; gap: 4px; font-size: 13px;
+  border-radius: var(--radius-md); box-shadow: var(--shadow-float); font-size: 13px; max-width: calc(100% - 80px);
 }
+.mt-toggle {
+  display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border: 0; background: none; cursor: pointer;
+  color: var(--ink); font-weight: 500; border-radius: inherit; width: 100%;
+}
+.mt-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.mt-toggle::after { content: "+"; margin-left: auto; padding-left: 8px; color: var(--ink-muted); }
+.mt-toggle[aria-expanded="true"]::after { content: "−"; }
+.mt-toggle:hover { color: var(--carmine); }
+.mt-body { display: flex; flex-direction: column; gap: 6px; padding: 2px 10px 10px; }
+.mt-note { margin: 0; max-width: 190px; font-size: 12px; line-height: 16px; color: var(--ink-muted); }
+.mt-note:empty { display: none; }
 .maptools label { display: flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap; }
 .maptools input { accent-color: var(--petrol); margin: 0; }
 .sw { width: 16px; height: 0; flex: none; border-top: 3px solid; border-radius: 2px; }
@@ -269,7 +324,10 @@ details.more[open] summary::after { content: "−"; }
   display: flex; flex-direction: column; gap: 8px; width: min(440px, calc(100% - 24px)); text-align: center;
 }
 .banner[hidden] { display: none; }
-.banner button { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--radius-sm); height: var(--control-h); padding: 0 6px; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.banner #bannerText { overflow-wrap: anywhere; }
+.banner .btns { display: flex; flex-wrap: wrap; justify-content: center; }
+.banner button { flex: 1 1 auto; min-width: 0; background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--radius-sm); min-height: var(--control-h); padding: 4px 10px; font-size: 13px; line-height: 16px; white-space: normal; cursor: pointer; }
+.banner button:hover { background: var(--paper); color: var(--ink); }
 .toast {
   position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 2000;
   max-width: min(520px, calc(100% - 32px)); background: var(--ink); color: var(--paper); padding: 10px 14px;
@@ -321,24 +379,27 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
     position: relative; z-index: 900; min-height: 84px; row-gap: 0; column-gap: var(--space-4);
     grid-template-rows: 44px 40px; grid-template-areas: ". mark tools" "tabs tabs tabs";
   }
-  .wordmark { font-size: 24px; }
+  .wordmark { font-size: 32px; }
   .tabs { gap: var(--space-3); font-size: 13px; }
   .mapwrap { position: absolute; inset: 0; top: calc(84px + env(safe-area-inset-top, 0px)); z-index: 0; }
   .mapwrap .leaflet-bottom { bottom: var(--sheet-visible, 45dvh); transition: bottom .22s cubic-bezier(.3, .7, .2, 1); }
-  .maptools { top: 8px; right: 8px; padding: 6px 8px; font-size: 12px; }
+  .maptools { top: 8px; right: 8px; font-size: 12px; }
+  /* высота листа — его видимая часть: прокрутка доходит до конца в любом положении */
   .panel {
-    position: absolute; left: 0; right: 0; bottom: 0; z-index: 800; height: calc(100dvh - 132px);
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 800; height: var(--sheet-visible, 45dvh);
     border-right: 0; border-top: 1px solid var(--line); border-radius: var(--radius-md) var(--radius-md) 0 0;
-    box-shadow: var(--shadow-float); transform: translateY(calc(100% - var(--sheet-visible, 45dvh)));
-    transition: transform .22s cubic-bezier(.3, .7, .2, 1);
+    box-shadow: var(--shadow-float);
+    transition: height .22s cubic-bezier(.3, .7, .2, 1);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .panel.dragging { transition: none; }
+  /* ручка — полоса во всю ширину высотой с палец */
   .sheet-handle {
-    display: flex; justify-content: center; position: sticky; top: 0; z-index: 5; background: var(--paper);
-    padding: 8px 0 6px; cursor: grab; touch-action: none;
+    display: flex; justify-content: center; align-items: center; position: sticky; top: 0; z-index: 5; background: var(--paper);
+    height: 32px; margin-bottom: -8px; cursor: grab; touch-action: none;
   }
-  .sheet-handle span { width: 40px; height: 4px; border-radius: var(--radius-pill); background: var(--line-strong); }
+  .sheet-handle span { width: 44px; height: 5px; border-radius: var(--radius-pill); background: var(--line-strong); }
+  .sheet-handle:active span { background: var(--ink-muted); }
   .tabpane { padding: var(--space-2) max(16px, env(safe-area-inset-right, 0px)) var(--space-8) max(16px, env(safe-area-inset-left, 0px)); }
   .banner { bottom: auto; top: 56px; }
 }
@@ -348,11 +409,22 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .homebox, .pointbox { display: flex; flex-direction: column; gap: var(--space-3); }
 .homerow { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 /* кнопка-значение: показывает состояние, при наведении и фокусе — действие */
-.btn.pick { flex: 1; min-width: 0; justify-content: flex-start; }
-.btn.pick .val { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.btn.pick .act { display: none; }
-.btn.pick:hover .val, .btn.pick:focus-visible .val { display: none; }
-.btn.pick:hover .act, .btn.pick:focus-visible .act { display: inline; }
+/* значение и действие лежат в одной клетке: при наведении значение уезжает вверх, действие въезжает снизу */
+.btn.pick {
+  flex: 1; min-width: 0; justify-content: flex-start; display: grid; grid-template-columns: auto minmax(0, 1fr);
+  overflow: hidden; transition: border-color .2s, background-color .2s, color .2s;
+}
+.btn.pick .val, .btn.pick .act {
+  grid-row: 1; grid-column: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left;
+  transition: transform .26s cubic-bezier(.3, .7, .2, 1), opacity .2s;
+}
+.btn.pick .act { transform: translateY(110%); opacity: 0; color: var(--carmine-strong); font-weight: 600; }
+.btn.pick:hover, .btn.pick:focus-visible { border-color: var(--carmine); background: var(--carmine-tint); }
+.btn.pick:hover .val, .btn.pick:focus-visible .val { transform: translateY(-110%); opacity: 0; }
+.btn.pick:hover .act, .btn.pick:focus-visible .act { transform: none; opacity: 1; }
+.btn.pick:active { transform: scale(.985); }
+.dot-house, .dot-ring { transition: transform .26s cubic-bezier(.3, .7, .2, 1); }
+.btn.pick:hover .dot-house, .btn.pick:hover .dot-ring, .btn.pick:focus-visible .dot-house, .btn.pick:focus-visible .dot-ring { transform: scale(1.25); }
 .dot-house { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--petrol); box-shadow: inset 0 0 0 4px var(--petrol), inset 0 0 0 7px var(--paper); }
 .dot-ring { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid var(--carmine); background: var(--paper); }
 .lbl small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 4px; }
@@ -367,7 +439,11 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 
 .mk-house { width: 18px; height: 18px; border-radius: 50%; background: var(--petrol); box-shadow: 0 0 0 2px var(--paper); position: relative; }
 .mk-house::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: var(--paper); }
-.mk-exit { width: 10px; height: 10px; border-radius: 50%; background: var(--paper); border: 2px solid var(--petrol); }
+.mk-exit { width: 16px; height: 16px; border-radius: 4px; background: var(--petrol); box-shadow: 0 0 0 1.5px var(--paper); display: grid; place-items: center; color: var(--on-petrol); }
+.mk-exit svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.leaflet-bar.locate a { display: grid; place-items: center; }
+.leaflet-bar.locate svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.leaflet-bar.locate a:hover { color: var(--carmine); }
 .mk-ring { width: 14px; height: 14px; border-radius: 50%; background: var(--paper); border: 3px solid var(--carmine); box-shadow: 0 0 0 2px var(--paper); }
 .mk-closed { width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 2px solid var(--carmine); color: var(--carmine); display: grid; place-items: center; }
 .mk-closed svg, .item .kind svg { width: 8px; height: 8px; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; fill: none; }
@@ -380,6 +456,12 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .leaflet-zones-pane path.zone.off { stroke: var(--map-gate-osm); stroke-dasharray: 3 4; fill: none; }
 .leaflet-zones-pane path.zone.draft { fill: none; stroke-dasharray: none; }
 .leaflet-zones-pane path.closed-seg { stroke: var(--carmine); stroke-width: 2.5; fill: none; }
+.leaflet-zones-pane path.zone.leaflet-interactive { cursor: pointer; }
+.leaflet-zones-pane path.zone.leaflet-interactive:hover { stroke-width: 2.4; }
+#map.picking .leaflet-zones-pane path.leaflet-interactive { cursor: crosshair; }
+.leaflet-zones-pane path.closed-hit { stroke: transparent; fill: none; cursor: pointer; }
+.btn.danger { color: var(--carmine-strong); border-color: var(--carmine); }
+.btn.danger:hover { background: var(--carmine); color: var(--on-carmine); }
 
 /* ---------- этап 4: направление ---------- */
 .dirbox { display: flex; flex-direction: column; gap: var(--space-3); }

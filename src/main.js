@@ -12,6 +12,7 @@ import { initSheet } from './ui/sheet.js';
 import { initRoutePanel } from './ui/route-panel.js';
 import { initHome } from './ui/home.js';
 import { initBlocks } from './ui/blocks.js';
+import { initGates } from './ui/gates.js';
 import { initDirection } from './ui/direction.js';
 import { initRope } from './ui/rope.js';
 import { initLibraryPanel } from './ui/library-panel.js';
@@ -68,22 +69,30 @@ for (const t of TABS) {
 function syncLayers() {
   const ly = store.layers;
   $('#lyExplored').checked = ly.explored; $('#lyPlaces').checked = ly.osm; $('#lyGates').checked = ly.gates;
-  $('#showOsm').checked = ly.osm;
   gl.visible('explored', ly.explored);
   /* ворот во дворах тысячи: показываем их только вблизи */
-  toggleLayer(layers.gates, ly.gates && map.getZoom() >= 16); toggleLayer(layers.closed, ly.gates);
+  toggleLayer(layers.gates, ly.gates && map.getZoom() >= 15); toggleLayer(layers.closed, ly.gates && map.getZoom() >= 14);
   toggleLayer(layers.osm, ly.osm);
 }
 app.syncLayers = syncLayers;
 map.on('zoomend', syncLayers);
 for (const [id, key] of [['#lyExplored', 'explored'], ['#lyPlaces', 'osm'], ['#lyGates', 'gates']]) {
-  $(id).addEventListener('change', (e) => { store.layers[key] = e.target.checked; syncLayers(); });
+  $(id).addEventListener('change', (e) => { store.layers[key] = e.target.checked; syncLayers(); save(); app.emit('layers'); });
 }
+/* легенда слоёв свёрнута в кнопку и раскрывается по нажатию */
+function syncLegend() {
+  const open = !!store.layers.legendOpen;
+  $('#mtToggle').setAttribute('aria-expanded', String(open));
+  $('#mtBody').hidden = !open;
+}
+$('#mtToggle').addEventListener('click', () => { store.layers.legendOpen = !store.layers.legendOpen; save(); syncLegend(); });
+syncLegend();
 
 initSheet(app);
 initModes(app);
 initHome(app);
 initBlocks(app);
+initGates(app);
 initDirection(app);
 initRoutePanel(app);
 initRope(app);

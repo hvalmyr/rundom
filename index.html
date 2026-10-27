@@ -14,7 +14,7 @@
 <body>
 <div class="app">
   <header class="top">
-    <span class="wordmark">rundom</span>
+    <span class="wordmark" translate="no">rundom</span>
     <nav class="tabs" role="tablist" aria-label="Разделы">
       <button role="tab" id="tab-route" aria-controls="pane-route" aria-selected="true" type="button">Маршрут</button>
       <button role="tab" id="tab-library" aria-controls="pane-library" aria-selected="false" type="button">Библиотека</button>
@@ -105,10 +105,10 @@
           <div class="sug" id="distSug" hidden></div>
         </div>
         <div class="seg" id="strictSeg" role="group" aria-label="Насколько строго держаться районов">
-          <button type="button" data-strict="1">Строго</button><button type="button" data-strict="0">По возможности</button>
+          <button type="button" data-strict="1">Строго</button><button type="button" data-strict="0">Примерно</button>
         </div>
         <div class="seg" id="multiSeg" role="group" aria-label="Несколько районов">
-          <button type="button" data-multi="one">Один район на вариант</button><button type="button" data-multi="all">Через все</button>
+          <button type="button" data-multi="one">Любой район</button><button type="button" data-multi="all">Все районы</button>
         </div>
         <p class="hint" id="distHint"></p>
       </div>
@@ -155,28 +155,31 @@
           </div>
           <label class="check"><input type="checkbox" id="allowRepeats"><span>Разрешить повторы улиц<small>Без галочки кольцо не проходит одну улицу дважды, считая обе её стороны</small></span></label>
           <label class="check"><input type="checkbox" id="avoidSteps"><span>Без лестниц</span></label>
-          <label class="check"><input type="checkbox" id="strictGates"><span>Строго к шлагбаумам<small>Шлагбаумы с access=private считать закрытыми</small></span></label>
+          <label class="check"><input type="checkbox" id="strictGates"><span>Не идти через частные шлагбаумы<small>Обычно шлагбаум перекрывает только машины, а пешеход обходит его сбоку, поэтому генератор через него ведёт. Включите, если во дворах такие шлагбаумы (в OSM — access=private или no) на деле закрыты и для пешеходов</small></span></label>
           <div class="setting">
-            <label for="kmStep">Метки на карте и в GPX</label>
-            <select id="kmStep">
-              <option value="0.5">каждые 0,5 км</option><option value="1">каждый 1 км</option><option value="2">каждые 2 км</option><option value="5">каждые 5 км</option>
-            </select>
+            <label for="kmStep">Метки</label>
+            <label class="unit"><input id="kmStep" class="num" type="number" inputmode="numeric" min="100" max="10000" step="100" autocomplete="off" aria-describedby="kmStepHint"><span>м</span></label>
           </div>
+          <p class="hint" id="kmStepHint">Через сколько метров ставить метки на карте и в GPX.</p>
           <div class="setting">
-            <label for="pace">Темп</label>
-            <label class="unit"><input id="pace" class="num" type="text" inputmode="decimal" placeholder="6:00" value="6:00" autocomplete="off" aria-describedby="paceHint"><span>мин/км</span></label>
+            <span class="lbl-inline" id="paceLbl">Темп</span>
+            <div class="stepper" role="group" aria-labelledby="paceLbl">
+              <button type="button" class="step" id="paceDown" aria-label="Быстрее на 5 секунд">−</button>
+              <label class="unit"><input id="pace" class="num" type="text" inputmode="numeric" placeholder="6:00" value="6:00" autocomplete="off" aria-labelledby="paceLbl" aria-describedby="paceHint"><span>/км</span></label>
+              <button type="button" class="step" id="paceUp" aria-label="Медленнее на 5 секунд">+</button>
+            </div>
           </div>
-          <p class="hint" id="paceHint">Для времени в карточках: 6:00 или 5,30.</p>
+          <p class="hint" id="paceHint">Минуты и секунды на километр: для времени в карточках.</p>
         </div>
       </details>
 
       <details class="more" id="blocksBox">
-        <summary>Закрытия и зоны <span class="muted" id="blocksCount"></span></summary>
+        <summary><span>Тупики и зоны <span class="count" id="blocksCount"></span></span></summary>
         <div class="blocks">
+          <p class="hint">Тупик — проход, которого на деле нет: калитка или отрезок улицы. Зона — место, куда маршрут не заходит. Нажмите на отметку на карте, чтобы удалить её.</p>
           <div class="btns">
-            <button class="btn small" id="addClosed" type="button">+ Закрыто</button>
+            <button class="btn small" id="addClosed" type="button">+ Тупик</button>
             <button class="btn small" id="addZone" type="button">+ Зона</button>
-            <button class="btn small" id="addCircle" type="button">+ Круг</button>
           </div>
           <div class="list" id="blocksList"></div>
         </div>
@@ -185,18 +188,10 @@
       <button class="btn primary big" id="go" type="button">Построить маршруты</button>
       <button class="btn big" id="cancel" type="button" hidden>Отменить</button>
       <div class="progress" id="prog" hidden>
-        <svg class="braid" viewBox="0 0 400 18" preserveAspectRatio="none" aria-hidden="true">
-          <path class="track" d="M2 9H398"/>
-          <path class="a" id="braidA"/>
-          <path class="b" id="braidB"/>
-        </svg>
+        <div class="braid" aria-hidden="true"><div class="fill" id="braidFill"></div></div>
       </div>
       <p class="status" id="status" role="status"></p>
       <div class="results" id="results"></div>
-      <button class="btn" id="more" type="button" hidden>Ещё варианты</button>
-      <h2 class="sec">Места для маршрута</h2>
-      <label class="check"><input type="checkbox" id="showOsm"><span>Показывать на карте<small>Смотровые, храмы, памятники, музеи, парки. Подгружаются сами при приближении. Нажмите на место, чтобы маршрут прошёл через него</small></span></label>
-      <div class="coord" id="osmInfo"></div>
     </section>
 
     <!-- ===== Библиотека ===== -->
@@ -208,9 +203,9 @@
       </div>
       <p class="hint" id="covStatus" role="status" hidden></p>
       <div class="summary" id="importSummary" hidden></div>
-      <h2 class="sec">Избранные маршруты</h2>
+      <h2 class="sec">Избранные маршруты <span class="count" id="favCount"></span></h2>
       <div class="list" id="favList"></div>
-      <h2 class="sec">Пробежки</h2>
+      <h2 class="sec">Пробежки <span class="count" id="trackCount"></span></h2>
       <div class="list" id="exploredList"></div>
     </section>
 
@@ -235,9 +230,15 @@
   <section class="mapwrap">
     <div id="map" aria-label="Карта"></div>
     <div class="maptools" id="maptools">
-      <label><input type="checkbox" id="lyExplored"><span class="sw explored"></span>Пройденные</label>
-      <label><input type="checkbox" id="lyGates"><span class="sw gates"></span>Закрытые проходы</label>
-      <label><input type="checkbox" id="lyPlaces"><span class="sw places"></span>Места</label>
+      <button class="mt-toggle" id="mtToggle" type="button" aria-expanded="false" aria-controls="mtBody" title="Слои карты">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg><span>Слои</span>
+      </button>
+      <div class="mt-body" id="mtBody" hidden>
+        <label><input type="checkbox" id="lyExplored"><span class="sw explored"></span>Пройденные</label>
+        <label><input type="checkbox" id="lyGates"><span class="sw gates"></span>Закрытые проходы</label>
+        <label><input type="checkbox" id="lyPlaces"><span class="sw places"></span>Места</label>
+        <p class="mt-note" id="osmInfo"></p>
+      </div>
     </div>
     <div class="banner" id="banner" hidden><span id="bannerText"></span><div class="btns"><button type="button" id="bannerOk" hidden>Готово</button><button type="button" id="bannerUndo" hidden>Отменить точку</button><button type="button" id="bannerCancel">Отмена</button></div></div>
   </section>

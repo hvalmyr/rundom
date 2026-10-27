@@ -141,7 +141,7 @@ export function initDirection(app) {
       ? 'Кольцо целиком в выбранных районах, кроме подводки и пути до района.'
       : 'Самая дальняя точка — в районе, выходить за его границы можно.';
   }
-  app.registerMode('districts', { ok() { app.setMode(null); }, leave() { setTimeout(() => { renderDistricts(); renderChips(); }); } });
+  app.registerMode('districts', { keep: '#districtBox', ok() { app.setMode(null); }, leave() { setTimeout(() => { renderDistricts(); renderChips(); }); } });
 
   /* поиск района по названию */
   const search = $('#distSearch'), sug = $('#distSug');

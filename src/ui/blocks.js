@@ -1,5 +1,5 @@
-/* Закрытия и запретные зоны: отметки пользователя, которые генератор обходит.
-   Хранятся только на устройстве (localStorage). */
+/* Тупики и запретные зоны: отметки пользователя, которые генератор обходит.
+   Тупик — калитка (точка) или закрытый отрезок улицы. Хранятся только на устройстве (localStorage). */
 import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
@@ -22,18 +22,39 @@ export function initBlocks(app) {
       interactive: false, keyboard: false
     });
   }
+  /* Нажатие на отметку открывает карточку с удалением. В режиме отметки на карте нажатие проходит к карте. */
+  function removable(layer, entry, what, onDelete, extra) {
+    layer.on('click', (e) => {
+      if (S.mode) return;
+      L.DomEvent.stop(e);
+      L.popup({ className: 'block-pop' }).setLatLng(e.latlng).setContent(el('div', { class: 'pop' },
+        el('strong', null, entry.name), el('div', { class: 'sub' }, what),
+        el('div', { class: 'btns' },
+          extra ? extra() : null,
+          el('button', { class: 'btn small danger', type: 'button', onclick: () => { map.closePopup(); onDelete(); toast('«' + entry.name + '» удалено.'); } }, 'Удалить')))).openOn(map);
+    });
+    return layer;
+  }
+  const dropZone = (z) => () => { store.zones = store.zones.filter((x) => x !== z); changed(); };
+  const dropBlock = (b) => () => { store.blocks = store.blocks.filter((x) => x !== b); changed(); };
   function renderMap() {
     layers.zones.clearLayers(); layers.blocks.clearLayers();
     for (const z of store.zones) {
-      const o = { renderer: svg, className: 'zone' + (z.on ? '' : ' off'), interactive: false };
-      layers.zones.addLayer(z.shape === 'circle' ? L.circle(z.c, { ...o, radius: z.r }) : L.polygon(z.ring, o));
+      const o = { renderer: svg, className: 'zone' + (z.on ? '' : ' off'), interactive: true };
+      const shape = z.shape === 'circle' ? L.circle(z.c, { ...o, radius: z.r }) : L.polygon(z.ring, o);
+      layers.zones.addLayer(removable(shape, z, z.on ? 'Запретная зона: маршрут сюда не заходит' : 'Зона выключена', dropZone(z),
+        () => el('button', { class: 'btn small', type: 'button', onclick: () => { map.closePopup(); z.on = !z.on; changed(); } }, z.on ? 'Выключить' : 'Включить')));
     }
     for (const b of store.blocks) {
       if (b.type === 'gate') {
-        layers.blocks.addLayer(L.marker(b.p, { icon: divIcon('mk-closed', 16, 16, CROSS), interactive: false, keyboard: false }));
+        layers.blocks.addLayer(removable(L.marker(b.p, { icon: divIcon('mk-closed', 16, 16, CROSS), keyboard: false, title: b.name }),
+          b, 'Тупик: здесь не пройти', dropBlock(b)));
       } else {
         const ln = b.line;
+        /* широкая невидимая линия поверх — в неё легко попасть пальцем */
         layers.blocks.addLayer(L.polyline(ln, { renderer: svg, className: 'closed-seg', interactive: false }));
+        layers.blocks.addLayer(removable(L.polyline(ln, { renderer: svg, className: 'closed-hit', interactive: true, weight: 16 }),
+          b, 'Тупик: отрезок улицы закрыт', dropBlock(b)));
         layers.blocks.addLayer(bar(ln[0], ln[1]));
         layers.blocks.addLayer(bar(ln[ln.length - 1], ln[ln.length - 2]));
       }
@@ -63,7 +84,7 @@ export function initBlocks(app) {
       list.appendChild(row(OPEN, o, null, () => { store.openGates = store.openGates.filter((x) => x !== o); S.graphKey = ''; changed(); }));
     }
     const n = store.zones.length + store.blocks.length + store.openGates.length;
-    $('#blocksCount').textContent = n ? '· ' + n : '';
+    $('#blocksCount').textContent = n ? String(n) : '';
   }
   function changed() { save(); renderMap(); renderList(); app.emit('blocks'); }
 
@@ -109,24 +130,24 @@ export function initBlocks(app) {
     if (n) { save(); renderMap(); }
   };
 
-  /* закрыто: одна точка и «Готово» — калитка, вторая точка — отрезок по улице между ними */
+  /* тупик: одна точка и «Готово» — калитка, вторая точка — закрытый отрезок по улице между ними */
   app.registerMode('closed', {
     click(ll) {
       const s = snapped(ll);
       if (!draft.pts.length) { draft.pts.push(s); drawDraft(false); return; }
       const a = draft.pts[0];
-      store.blocks.push({ id: uid(), type: 'segment', name: 'Закрытый отрезок', a: a.p, b: s.p, line: streetLine(a.p, s.p) || [a.p, s.p] });
+      store.blocks.push({ id: uid(), type: 'segment', name: nextName('Тупик', store.blocks), a: a.p, b: s.p, line: streetLine(a.p, s.p) || [a.p, s.p] });
       app.setMode(null); changed();
     },
     ok() {
       if (!draft.pts.length) { toast('Нажмите на закрытый проход на карте.'); return; }
-      store.blocks.push({ id: uid(), type: 'gate', name: 'Калитка', p: draft.pts[0].p });
+      store.blocks.push({ id: uid(), type: 'gate', name: nextName('Тупик', store.blocks), p: draft.pts[0].p });
       app.setMode(null); changed();
     },
     leave: clear
   });
   $('#addClosed').addEventListener('click', () => app.setMode('closed',
-    'Нажмите на закрытый проход и «Готово» — это калитка. Вторая точка на той же улице отметит закрытый отрезок'));
+    'Нажмите на закрытый проход и «Готово» — это калитка. Вторая точка на той же улице закроет отрезок'));
 
   app.registerMode('zone', {
     click(ll) { draft.pts.push(round5([ll.lat, ll.lng])); drawDraft(true); },
@@ -140,18 +161,6 @@ export function initBlocks(app) {
   });
   $('#addZone').addEventListener('click', () => app.setMode('zone', 'Нажимайте по углам зоны, затем «Готово»'));
 
-  app.registerMode('circle', {
-    click(ll) {
-      const p = round5([ll.lat, ll.lng]);
-      if (!draft.pts.length) { draft.pts.push(p); drawDraft(false); $('#bannerText').textContent = 'Теперь нажмите на край круга'; return; }
-      const c = draft.pts[0], r = Math.round(Core.hav(c[0], c[1], p[0], p[1]));
-      if (r < 15) { toast('Круг слишком маленький.'); return; }
-      store.zones.push({ id: uid(), name: nextName('Зона', store.zones), shape: 'circle', c, r, on: true });
-      app.setMode(null); changed();
-    },
-    leave: clear
-  });
-  $('#addCircle').addEventListener('click', () => app.setMode('circle', 'Нажмите в центр круга'));
 
   /* ворота из OSM, которые на деле открыты */
   app.reopenGate = (c) => {

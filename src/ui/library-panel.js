@@ -2,7 +2,7 @@
 import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { cssVar, divIcon } from '../map/map.js';
-import { $, el, fmtKm, uid, round5, toast, renameable, iconBtn } from './dom.js';
+import { $, el, fmtKm, uid, round5, toast, renameable, iconBtn, removeBtn } from './dom.js';
 
 const KIND = { gpx: 'GPX', route: 'маршрут', manual: 'вручную' };
 const fmtDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
@@ -19,48 +19,63 @@ export function initLibraryPanel(app) {
 
   const renameIn = (entry, coll) => renameable(entry.name, (v) => { entry.name = v; entry.autoName = false; coll.update(entry); });
 
-  /* Кружок слева показывает маршрут на карте; виден только один, повторное нажатие убирает. */
-  function toggleShown(f) {
+  /* Кружок слева показывает маршрут или пробежку на карте кармином; виден один, повторное нажатие убирает. */
+  function toggleShown(f, shape) {
     if (S.lineId === f.id) app.hideLine();
-    else { app.showLine(f, f.id); app.sheet.peek(); }
-    renderFavorites();
+    else { app.showLine(shape, f.id); app.sheet.peek(); }
+    renderFavorites(); renderTracks();
+  }
+
+  /* Строка списка: кружок показа, имя и сводка в одну строку, иконки действий. Избранное и пробежки — одинаково. */
+  function row(f, coll, shape, meta, acts) {
+    const on = S.lineId === f.id;
+    return el('div', { class: 'item lib' + (on ? ' on' : '') },
+      el('button', { class: 'show-dot', type: 'button', 'aria-pressed': String(on), 'aria-label': (on ? 'Убрать с карты ' : 'Показать на карте ') + f.name, title: on ? 'Убрать с карты' : 'Показать на карте', onclick: () => toggleShown(f, shape) }),
+      el('div', { class: 'grow' }, renameIn(f, coll), el('div', { class: 'meta' }, meta)),
+      el('div', { class: 'acts' }, acts));
+  }
+  /* длинный список свёрнут до SHORT строк; кнопка на всю ширину раскрывает его */
+  const SHORT = 4, expanded = { fav: false, tracks: false };
+  function fill(list, key, rows, empty) {
+    list.innerHTML = '';
+    if (!rows.length) { list.appendChild(el('p', { class: 'empty' }, empty)); return; }
+    const open = expanded[key] || rows.length <= SHORT + 1;
+    list.append(...(open ? rows : rows.slice(0, SHORT)));
+    if (rows.length > SHORT + 1) {
+      list.appendChild(el('button', { class: 'btn small more-btn', type: 'button', onclick: () => { expanded[key] = !open; render(); } },
+        open ? 'Свернуть' : 'Показать все ' + rows.length));
+    }
   }
 
   function renderFavorites() {
-    const list = $('#favList');
-    list.innerHTML = '';
-    for (const f of favorites.items.slice().reverse()) {
-      const on = S.lineId === f.id;
-      list.appendChild(el('div', { class: 'item' },
-        el('button', { class: 'show-dot', type: 'button', 'aria-pressed': String(on), 'aria-label': (on ? 'Убрать с карты ' : 'Показать на карте ') + f.name, title: on ? 'Убрать с карты' : 'Показать на карте', onclick: () => toggleShown(f) }),
-        el('div', { class: 'grow' },
-          renameIn(f, favorites),
-          el('div', { class: 'meta' }, fmtKm(f.length) + ' км · ' + fmtDate(f.created))),
-        el('div', { class: 'acts' },
-          iconBtn('download', 'Скачать GPX', () => app.downloadRoute(f.name, f.coords, f.length, f.loop), true),
-          iconBtn('remove', 'Удалить ' + f.name, () => {
-            if (S.lineId === f.id) app.hideLine();
-            favorites.remove(f.id); render(); app.emit('favorites');
-          }, true))));
-    }
-    if (!favorites.items.length) list.appendChild(el('p', { class: 'empty' }, 'Нажмите на звёздочку у варианта маршрута, чтобы сохранить его здесь.'));
+    const items = favorites.items.slice().reverse();
+    fill($('#favList'), 'fav', items.map((f) => row(f, favorites, f, fmtKm(f.length) + ' км · ' + fmtDate(f.created), [
+      iconBtn('download', 'Скачать GPX', () => app.downloadRoute(f.name, f.coords, f.length, f.loop), true),
+      removeBtn('Удалить ' + f.name, () => {
+        if (S.lineId === f.id) app.hideLine();
+        favorites.remove(f.id); render(); app.emit('favorites');
+        toast('Маршрут удалён из избранного.');
+      })
+    ])), 'Нажмите на звёздочку у варианта маршрута, чтобы сохранить его здесь.');
+    $('#favCount').textContent = favorites.items.length || '';
   }
 
   function renderTracks() {
     app.gl.lines('explored', tracks.items.flatMap((t) => t.lines));
-    const list = $('#exploredList');
-    list.innerHTML = '';
-    for (const t of tracks.items.slice().reverse()) {
+    const items = tracks.items.slice().sort((a, b) => (b.date || b.created) - (a.date || a.created));
+    fill($('#exploredList'), 'tracks', items.map((t) => {
       const meta = [fmtKm(t.km || 0) + ' км'];
-      if (t.newKm !== undefined) meta.push(fmtKm(t.newKm) + ' км новых');
-      meta.push(KIND[t.kind] || '');
-      list.appendChild(el('div', { class: 'item' },
-        el('div', { class: 'grow' }, renameIn(t, tracks), el('div', { class: 'meta' }, meta.join(' · '))),
-        el('div', { class: 'acts' },
-          iconBtn('show', 'Показать на карте', () => { fitLines(t.lines); app.sheet.peek(); }),
-          iconBtn('remove', 'Удалить ' + t.name, () => { tracks.remove(t.id); render(); }, true))));
-    }
-    if (!tracks.items.length) list.appendChild(el('p', { class: 'empty' }, 'Загрузите GPX своих пробежек или отметьте улицы вручную.'));
+      if (t.newKm !== undefined) meta.push('+' + fmtKm(t.newKm) + ' новых');
+      if (KIND[t.kind]) meta.push(KIND[t.kind]);
+      return row(t, tracks, { lines: t.lines }, meta.join(' · '), [
+        removeBtn('Удалить ' + t.name, () => {
+          if (S.lineId === t.id) app.hideLine();
+          tracks.remove(t.id); render();
+          toast('Пробежка удалена.');
+        })
+      ]);
+    }), 'Загрузите GPX своих пробежек или отметьте улицы вручную.');
+    $('#trackCount').textContent = tracks.items.length || '';
   }
 
   function render() {
@@ -206,6 +221,6 @@ export function initLibraryPanel(app) {
 
   app.on('theme', renderTracks);
   app.on('favorites', renderFavorites);
-  app.on('lineShown', renderFavorites);
+  app.on('lineShown', () => { renderFavorites(); renderTracks(); });
   render();
 }

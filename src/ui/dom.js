@@ -25,11 +25,38 @@ export function el(tag, attrs, ...children) {
 export const ICON = {
   show: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
-  remove: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+  remove: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  reset: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  home: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/></svg>',
+  target: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>'
 };
 /* Кнопка-иконка с подписью для экранного диктора и подсказкой. */
 export const iconBtn = (icon, label, onclick, ghost) =>
   el('button', { class: 'iconbtn' + (ghost ? ' ghost' : ''), type: 'button', 'aria-label': label, title: label, html: ICON[icon], onclick });
+
+/* Удаление в два нажатия: первое превращает крестик в «Удалить?», второе удаляет.
+   Без второго нажатия за 4 секунды или при уходе фокуса кнопка возвращается. */
+export function removeBtn(label, onConfirm) {
+  const b = iconBtn('remove', label, null, true);
+  let timer = null;
+  const reset = () => {
+    clearTimeout(timer); timer = null;
+    b.classList.remove('confirm'); b.innerHTML = ICON.remove;
+    b.setAttribute('aria-label', label); b.title = label;
+  };
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (timer) { reset(); onConfirm(); return; }
+    b.classList.add('confirm'); b.textContent = 'Удалить?';
+    b.setAttribute('aria-label', 'Подтвердите: ' + label); b.title = 'Нажмите ещё раз, чтобы удалить';
+    timer = setTimeout(reset, 4000);
+  });
+  b.addEventListener('blur', () => { if (timer) setTimeout(reset, 150); });
+  return b;
+}
 
 export const tick = () => new Promise((r) => setTimeout(r, 0));
 export const fmt1 = (x) => (Math.round(x * 10) / 10).toFixed(1).replace('.', ',');
@@ -64,9 +91,24 @@ export function download(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-/* Переключатель .seg: отмечает кнопку, у которой data-атрибут равен значению. */
+/* Переключатель .seg: отмечает кнопку, у которой data-атрибут равен значению;
+   подложка выделения (::before) едет к ней по --i из --n. */
 export function syncSeg(root, attr, value) {
-  root.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset[attr] === String(value))));
+  const btns = Array.from(root.querySelectorAll('button'));
+  let on = -1;
+  btns.forEach((b, i) => {
+    const hit = b.dataset[attr] === String(value);
+    b.setAttribute('aria-pressed', String(hit));
+    if (hit) on = i;
+  });
+  /* первая отметка — без анимации: подложка сразу на месте */
+  if (!root.style.getPropertyValue('--i')) {
+    root.classList.add('still');
+    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('still')));
+  }
+  root.style.setProperty('--n', btns.length);
+  root.style.setProperty('--i', Math.max(0, on));
+  root.classList.toggle('none', on < 0);
 }
 
 /* Имя-кнопка: по нажатию превращается в поле, Enter или уход фокуса сохраняет, Esc отменяет.

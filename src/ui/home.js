@@ -3,12 +3,15 @@ import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { divIcon } from '../map/map.js';
-import { $, syncSeg, round5, toast } from './dom.js';
+import { $, syncSeg, round5, toast, ICON } from './dom.js';
 
 const plural = (n, one, few, many) => {
   const m10 = n % 10, m100 = n % 100;
   return m10 === 1 && m100 !== 11 ? one : (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? few : many);
 };
+
+/* выход из дома — дверь со стрелкой наружу: не спутать с местами на карте */
+const EXIT = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3H3.5v10H6"/><path d="M7.5 8h6M11 5.5L13.5 8 11 10.5"/></svg>';
 
 export function initHome(app) {
   const { map, layers, S } = app;
@@ -47,7 +50,7 @@ export function initHome(app) {
       layers.home.addLayer(m);
     }
     store.exits.forEach((p, i) => {
-      const m = L.marker(p, { icon: divIcon('mk-exit', 10, 10), title: editing ? 'Убрать выход' : 'Выход', keyboard: false, interactive: editing });
+      const m = L.marker(p, { icon: divIcon('mk-exit', 16, 16, EXIT), title: editing ? 'Убрать выход' : 'Выход из дома', keyboard: false, interactive: editing });
       if (editing) m.on('click', (e) => { L.DomEvent.stop(e); store.exits.splice(i, 1); save(); render(); });
       layers.home.addLayer(m);
     });
@@ -93,6 +96,34 @@ export function initHome(app) {
   $('#ringClear').addEventListener('click', () => { store.ringStart = null; save(); render(); });
 
   $('#approachMax').addEventListener('input', (e) => { store.prefs.approachMax = parseInt(e.target.value, 10); save(); render(); });
+
+  /* Кнопка на карте под масштабом: к дому или к своей точке старта. */
+  const Locate = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd() {
+      const bar = L.DomUtil.create('div', 'leaflet-bar locate');
+      const a = L.DomUtil.create('a', '', bar);
+      a.href = '#'; a.setAttribute('role', 'button');
+      L.DomEvent.disableClickPropagation(bar);
+      L.DomEvent.on(a, 'click', (e) => {
+        L.DomEvent.preventDefault(e);
+        const p = origin();
+        if (!p) { toast(homeMode() ? 'Дом ещё не отмечен.' : 'Точка старта ещё не задана.'); return; }
+        map.setView(p, Math.max(map.getZoom(), 15));
+      });
+      this.link = a;
+      return bar;
+    }
+  });
+  const origin = () => (homeMode() ? store.home : store.A && [store.A.lat, store.A.lon]);
+  const locate = new Locate().addTo(map);
+  function syncLocate() {
+    const label = homeMode() ? 'Показать дом' : 'Показать точку старта';
+    locate.link.innerHTML = homeMode() ? ICON.home : ICON.target;
+    locate.link.title = label; locate.link.setAttribute('aria-label', label);
+  }
+  app.on('start', syncLocate);
+  syncLocate();
 
   render();
 }

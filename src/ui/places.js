@@ -81,7 +81,7 @@ export function initPlaces(app) {
   let timer = null;
   const later = () => { clearTimeout(timer); timer = setTimeout(load, 500); };
 
-  $('#showOsm').addEventListener('change', (e) => { store.layers.osm = e.target.checked; app.syncLayers(); save(); load(); });
+  app.on('layers', load);
   map.on('moveend', later);
   app.on('forced', render);
   app.on('tab', later);

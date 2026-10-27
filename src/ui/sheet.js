@@ -1,4 +1,5 @@
-/* Нижний лист на телефоне: три положения (свёрнут, половина, почти весь экран), тянется за ручку. */
+/* Нижний лист на телефоне: три положения (свёрнут, половина, почти весь экран), тянется за ручку.
+   Высота листа равна видимой части: так его содержимое прокручивается до конца в любом положении. */
 import { $ } from './dom.js';
 
 const MOBILE = window.matchMedia('(max-width: 860px)');
@@ -8,14 +9,17 @@ export function initSheet(app) {
   const panel = $('#panel'), handle = $('#sheetHandle');
   let state = 'half';
 
-  const maxH = () => panel.getBoundingClientRect().height || window.innerHeight * 0.85;
+  /* лист до шапки с небольшим зазором: карта под ним видна краем */
+  const maxH = () => Math.max(200, window.innerHeight - ($('.top').getBoundingClientRect().height || 84) - 48);
   function visible(name) { return Math.max(88, STOPS[name] * maxH()); }
+  function setVisible(v) { document.documentElement.style.setProperty('--sheet-visible', Math.round(v) + 'px'); }
   function set(name) {
     state = name;
-    document.documentElement.style.setProperty('--sheet-visible', visible(name) + 'px');
+    setVisible(visible(name));
     setTimeout(() => app.map.invalidateSize(), 240);
   }
 
+  /* тянуть можно за ручку и за полосу над содержимым; щелчок без движения переключает положение */
   let startY = 0, startVis = 0, dragging = false;
   handle.addEventListener('pointerdown', (e) => {
     if (!MOBILE.matches) return;
@@ -25,8 +29,7 @@ export function initSheet(app) {
   });
   handle.addEventListener('pointermove', (e) => {
     if (!dragging) return;
-    const v = Math.min(maxH(), Math.max(60, startVis + (startY - e.clientY)));
-    document.documentElement.style.setProperty('--sheet-visible', v + 'px');
+    setVisible(Math.min(maxH(), Math.max(60, startVis + (startY - e.clientY))));
   });
   const end = (e) => {
     if (!dragging) return;

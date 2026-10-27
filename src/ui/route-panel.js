@@ -3,10 +3,8 @@ import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { loadStreets } from '../data/streets.js';
-import { cssVar, divIcon } from '../map/map.js';
-import { $, el, tick, fmtKm, fmtNum, fmtTime, toast, download, syncSeg, uid } from './dom.js';
-
-const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>';
+import { divIcon } from '../map/map.js';
+import { $, el, tick, fmtKm, fmtNum, fmtTime, toast, download, syncSeg, uid, ICON } from './dom.js';
 
 export function initRoutePanel(app) {
   const { map, layers, S } = app;
@@ -188,7 +186,7 @@ export function initRoutePanel(app) {
     $('#loop').checked = p.loop; $('#fieldB').hidden = p.loop;
     $('#prefMain').value = p.main; $('#prefAppeal').value = p.appeal; $('#prefNovelty').value = p.novelty; $('#prefPoi').value = p.poi;
     $('#avoidSteps').checked = p.avoidSteps; $('#allowRepeats').checked = p.allowRepeats; $('#strictGates').checked = p.strictGates;
-    $('#kmStep').value = String(p.kmStep); $('#pace').value = p.pace;
+    $('#kmStep').value = String(Math.round(p.kmStep * 1000)); $('#pace').value = fmtPace(paceSec());
     outputs();
   }
   function bindPref(id, key, conv) {
@@ -201,6 +199,27 @@ export function initRoutePanel(app) {
       if (key === 'pace') renderResults();
     });
   }
+  /* метки: метры в поле, километры в настройках; неверное значение откатывается при уходе с поля */
+  $('#kmStep').addEventListener('change', (e) => {
+    const m = Math.round(parseFloat(String(e.target.value).replace(',', '.')));
+    if (m >= 100 && m <= 10000) { store.prefs.kmStep = m / 1000; save(); if (S.sel >= 0) drawRoutes(); }
+    else toast('Метки — от 100 до 10 000 м.');
+    e.target.value = String(Math.round(store.prefs.kmStep * 1000));
+  });
+  /* темп «м:сс»: цифры без двоеточия тоже понимаются (530 → 5:30), стрелки и кнопки — по 5 секунд */
+  const setPace = (sec) => {
+    store.prefs.pace = fmtPace(Math.max(150, Math.min(1200, Math.round(sec / 5) * 5)));
+    $('#pace').value = store.prefs.pace; save(); renderResults();
+  };
+  $('#pace').addEventListener('change', (e) => {
+    const sec = parsePace(e.target.value);
+    if (sec) setPace(sec); else { toast('Темп — минуты и секунды на километр, например 5:30.'); e.target.value = store.prefs.pace; }
+  });
+  $('#pace').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); setPace(paceSec() + (e.key === 'ArrowUp' ? 5 : -5)); }
+  });
+  $('#paceDown').addEventListener('click', () => setPace(paceSec() - 5));
+  $('#paceUp').addEventListener('click', () => setPace(paceSec() + 5));
   const int = (t) => parseInt(t.value, 10);
   bindPref('#loop', 'loop');
   bindPref('#prefMain', 'main', int);
@@ -210,8 +229,6 @@ export function initRoutePanel(app) {
   bindPref('#avoidSteps', 'avoidSteps');
   bindPref('#allowRepeats', 'allowRepeats');
   bindPref('#strictGates', 'strictGates');
-  bindPref('#kmStep', 'kmStep', (t) => parseFloat(t.value));
-  bindPref('#pace', 'pace');
   $('#tolSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     store.prefs.tol = parseFloat(b.dataset.tol); syncTol(); save();
@@ -221,12 +238,21 @@ export function initRoutePanel(app) {
     store.prefs.tolSign = b.dataset.sign; syncTol(); save();
   });
 
-  function paceMin() {
-    const m = /^\s*(\d{1,2})\s*[:.,]\s*(\d{1,2})\s*$/.exec(store.prefs.pace || '');
-    if (m) return parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
-    const n = parseFloat(store.prefs.pace);
-    return n > 0 ? n : 6;
+  /* «5:30», «5.30», «5,5» (минуты с долей), «530» → секунды на километр; null — не темп */
+  function parsePace(v) {
+    v = String(v || '').trim();
+    let m = /^(\d{1,2})\s*[:.]\s*(\d{1,2})$/.exec(v);
+    if (m && +m[2] < 60) return +m[1] * 60 + +m[2];
+    m = /^(\d{1,2}),(\d)$/.exec(v);
+    if (m) return Math.round((+m[1] + +m[2] / 10) * 60);
+    m = /^(\d{1,2})(\d\d)$/.exec(v);
+    if (m && +m[2] < 60) return +m[1] * 60 + +m[2];
+    m = /^(\d{1,2})$/.exec(v);
+    return m && +m[1] > 0 ? +m[1] * 60 : null;
   }
+  const fmtPace = (sec) => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  const paceSec = () => parsePace(store.prefs.pace) || 360;
+  const paceMin = () => paceSec() / 60;
 
   /* ---------- «пройти через» ---------- */
   const isForced = (id) => S.forced.some((f) => f.id === id);
@@ -249,17 +275,10 @@ export function initRoutePanel(app) {
   /* ---------- генерация ---------- */
   const say = (msg, kind) => { const s = $('#status'); s.textContent = msg || ''; s.className = 'status' + (kind ? ' ' + kind : ''); };
 
-  /* Плетение из двух нитей: длина = прогресс. */
-  function braid(frac) {
-    const end = 2 + 396 * Math.max(0.04, Math.min(1, frac));
-    let a = 'M2 9', b = 'M2 9';
-    for (let x = 2, up = true; x < end; x += 30, up = !up) {
-      const x2 = Math.min(end, x + 30), mid = (x + x2) / 2;
-      a += ` Q ${mid} ${up ? 1 : 17} ${x2} 9`;
-      b += ` Q ${mid} ${up ? 17 : 1} ${x2} 9`;
-    }
-    $('#braidA').setAttribute('d', a);
-    $('#braidB').setAttribute('d', b);
+  /* Полоса прогресса: длина — доля работы. Пока ждём сеть (wait), полоса не стоит: по дорожке бежит блик. */
+  function braid(frac, wait = false) {
+    $('#braidFill').style.width = (100 * Math.max(0.04, Math.min(1, frac))).toFixed(1) + '%';
+    $('#prog .braid').classList.toggle('wait', wait);
   }
   function setBusy(b) {
     S.busy = b;
@@ -274,22 +293,6 @@ export function initRoutePanel(app) {
     const have = new Set(pois.map((p) => p.id));
     for (const p of S.osmPois) if (!have.has(p.id)) pois.push({ id: p.id, lat: p.lat, lon: p.lon, name: p.name, cat: p.cat });
     return { parks: ctx.parks, pois };
-  }
-
-  function renderClosed() {
-    layers.gates.clearLayers(); layers.closed.clearLayers();
-    const g = S.graph; if (!g) return;
-    const gray = cssVar('map-gate-osm');
-    for (const ln of g.closedWays) layers.closed.addLayer(L.polyline(ln, { color: gray, weight: 2, dashArray: '4 5', opacity: 0.9, interactive: false }));
-    for (const c of g.closedGates) {
-      if (app.isReopened(c)) continue;
-      const m = L.marker([c.lat, c.lon], { icon: divIcon('mk-gate', 6, 18), keyboard: false, title: 'Закрыто для пешехода' });
-      m.bindPopup(() => el('div', { class: 'pop' },
-        el('strong', null, 'Закрытый проход'),
-        el('div', { class: 'sub' }, c.barrier + (c.access ? ' (access=' + c.access + ')' : '') + (c.name ? ', ' + c.name : '') + ' · по данным OSM'),
-        el('button', { class: 'btn small', type: 'button', onclick: () => { app.reopenGate(c); map.closePopup(); } }, 'На самом деле открыто')));
-      layers.gates.addLayer(m);
-    }
   }
 
   async function generate() {
@@ -317,6 +320,7 @@ export function initRoutePanel(app) {
       const R = Core.loadRadius(d, Lm, 5000);
       const need = { A: [A.lat, A.lon], B: [B.lat, B.lon], R };
       if (!S.net || !Core.regionContains(S.net.region, need)) {
+        braid(0.08, true);
         const got = await loadStreets(need, ac.signal, say);
         if (!got.parsed.ways.length) throw new Error('В этой зоне не нашлось улиц.');
         S.net = { region: need, parsed: got.parsed, ctx: got.ctx };
@@ -339,7 +343,7 @@ export function initRoutePanel(app) {
       const spec = app.blocksSpec();
       const nBlocked = Core.applyBlocks(g, spec);
       app.snapBlocks();
-      renderClosed();
+      app.emit('graph');
 
       const comp = 30;
       let sA, sB, exits = null, ringNode = null, lostExits = 0;
@@ -357,7 +361,7 @@ export function initRoutePanel(app) {
         exits = exits.filter((v) => g.comp[v] === main);
         if (store.ringStart) {
           const s = Core.nearestNode(g, B.lat, B.lon, 200, comp);
-          if (!s || g.comp[s.node] !== main) throw new Error('От дома до старта кольца нет пути без закрытий и зон. Сдвиньте старт кольца или выключите зону.');
+          if (!s || g.comp[s.node] !== main) throw new Error('От дома до старта кольца нет пути в обход тупиков и зон. Сдвиньте старт кольца или выключите зону.');
           ringNode = s.node;
         }
         sA = sB = { node: ringNode === null ? exits[0] : ringNode, dist: 0 };
@@ -391,13 +395,13 @@ export function initRoutePanel(app) {
       const res = await runGenerator(S.lastGen, 4, ac, 0.25);
       S.routes = res.routes;
       S.sel = S.routes.length ? 0 : -1;
-      const limits = [nBlocked ? 'закрытий и зон' : '', prefs.allowRepeats ? '' : 'правила без повторов'].filter(Boolean).join(' и ');
+      const limits = [nBlocked ? 'тупиков и зон' : '', prefs.allowRepeats ? '' : 'правила без повторов'].filter(Boolean).join(' и ');
       if (!S.routes.length) {
         if (direction && res.dirRejects > res.attempts / 3) {
           say(direction.dir
             ? 'В направлении ' + direction.label + ' кольцо ' + fmtNum(prefs.km) + ' км не получилось. Расширьте точность направления или измените дистанцию.'
             : (prefs.distStrict
-              ? 'Строго внутри районов (' + direction.label + ') кольцо ' + fmtNum(prefs.km) + ' км не помещается. Попробуйте «По возможности» или уменьшите дистанцию.'
+              ? 'Строго внутри районов (' + direction.label + ') кольцо ' + fmtNum(prefs.km) + ' км не помещается. Попробуйте «Примерно» или уменьшите дистанцию.'
               : 'Кольцо ' + fmtNum(prefs.km) + ' км не дотягивается дальней точкой до районов: ' + direction.label + '. Измените дистанцию или районы.'), 'warn');
         } else {
           say('Не удалось подобрать маршрут нужной длины' + (limits ? ' с учётом ' + limits : '') + '. Измените дистанцию, увеличьте допуск' +
@@ -462,42 +466,6 @@ export function initRoutePanel(app) {
       ': кольцо ' + fmtKm(Lm) + ' км до ' + (one ? 'него' : 'них') + ' не дотянется.';
   }
 
-  /* Доля общих улиц двух маршрутов (по длине). */
-  function similarity(a, b) {
-    const g = S.lastGen.g, inA = new Set(a.edges);
-    let shared = 0;
-    for (const e of b.edges) if (inA.has(e)) shared += g.eLen[e];
-    const uni = a.length + b.length - shared;
-    return uni > 0 ? shared / uni : 1;
-  }
-
-  /* «Ещё варианты»: новые маршруты добавляются к списку, старые остаются. */
-  async function more() {
-    if (S.busy || !S.lastGen || S.lastGen.g !== S.graph) { generate(); return; }
-    const ac = new AbortController(); S.abort = ac;
-    setBusy(true);
-    try {
-      const res = await runGenerator(S.lastGen, 8, ac, 0.05);
-      const fresh = [];
-      for (const r of res.routes) {
-        if (fresh.length >= 3) break;
-        if ([...S.routes, ...fresh].every((x) => similarity(x, r) < 0.6)) fresh.push(r);
-      }
-      if (!fresh.length) say('Новых непохожих вариантов не нашлось. Попробуйте изменить дистанцию или предпочтения.');
-      else {
-        S.routes.push(...fresh);
-        S.sel = S.routes.length - fresh.length;
-        say('Добавлено вариантов: ' + fresh.length + '. Всего ' + S.routes.length + '.');
-        renderResults(); drawRoutes(true);
-      }
-    } catch (e) {
-      if (e && e.name === 'AbortError') say('Построение отменено.');
-      else say((e && e.message) || 'Не удалось подобрать варианты.', 'warn');
-    } finally {
-      setBusy(false); S.abort = null;
-    }
-  }
-  $('#more').addEventListener('click', more);
 
   /* ---------- избранное ---------- */
   const favOf = (r) => app.favorites.items.find((f) => f.id === r.id);
@@ -524,31 +492,32 @@ export function initRoutePanel(app) {
       const notes = [];
       if (r.off) notes.push('Длина отличается от заданной на ' + Math.round(r.err * 100) + '%');
       if (m.stepsLen > 0) notes.push('Есть лестницы: ' + Math.round(m.stepsLen) + ' м');
+      if (r.dirOut) notes.push('Вне выбранного направления ' + Math.round(r.dirOut * 100) + '% пути: целиком в секторе кольцо не складывается');
       if (S.lastGen && S.lastGen.noRepeat && r.repeat > 60) notes.push('Повтор улиц: ' + Math.round(r.repeat / 10) * 10 + ' м');
-      const fav = !!favOf(r);
-      box.appendChild(el('article', { class: 'route', 'aria-current': String(i === S.sel), onclick: () => selectRoute(i) },
+      const fav = !!favOf(r), on = i === S.sel, edited = !!(r.history && r.history.length);
+      /* действия карточки — иконки; у невыбранной видна только звезда избранного */
+      const act = (icon, label, fn, extra = {}) => el('button', {
+        class: 'iconbtn', type: 'button', 'aria-label': label, title: label, html: ICON[icon],
+        onclick: (e) => { e.stopPropagation(); fn(); }, ...extra
+      });
+      box.appendChild(el('article', { class: 'route', 'aria-current': String(on), onclick: () => selectRoute(i) },
         el('h3', null, r.name),
-        el('button', {
-          class: 'star', type: 'button', 'aria-pressed': String(fav), html: STAR,
-          'aria-label': fav ? 'Убрать из избранного' : 'В избранное',
-          onclick: (e) => { e.stopPropagation(); toggleFavorite(r); }
-        }),
+        fav && !on ? el('span', { class: 'star-mark', title: 'В избранном', html: ICON.star }) : null,
         el('div', { class: 'figs' }, el('span', { class: 'len' }, fmtKm(r.length) + ' км'), el('span', { class: 'muted' }, '≈ ' + fmtTime(mins))),
         el('div', { class: 'meta' }, [
           Math.round(m.newShare * 100) + '% новых улиц',
           Math.round(Math.max(m.pathShare, m.parkShare) * 100) + '% тропы и парки',
-          'переходов ' + m.crossings,
+          m.crossings ? 'светофоров ' + m.crossings : 'без светофоров',
           r.approach > 0 ? 'подводка 2 × ' + Math.round(r.approach / 10) * 10 + ' м' : ''
         ].filter(Boolean).join(' · ')),
         notes.length ? el('div', { class: 'note' }, notes.join('. ')) : null,
         editsLine(r),
-        i === S.sel ? el('div', { class: 'actions' },
-          el('button', { class: 'btn small', type: 'button', onclick: (e) => { e.stopPropagation(); downloadRoute(r.name, r.coords, r.length, r.loop); } }, 'Скачать GPX'),
-          el('button', { class: 'btn small', type: 'button', onclick: (e) => { e.stopPropagation(); markRoute(i); } }, 'Отметить пройденным'),
-          r.history && r.history.length ? el('button', { class: 'btn small', type: 'button', onclick: (e) => { e.stopPropagation(); app.ropeUndo(); } }, 'Отменить шаг') : null,
-          r.history && r.history.length ? el('button', { class: 'btn small ghost', type: 'button', onclick: (e) => { e.stopPropagation(); app.ropeReset(); } }, 'Сбросить правки') : null) : null));
+        on ? el('div', { class: 'actions' },
+          act('star', fav ? 'Убрать из избранного' : 'В избранное', () => toggleFavorite(r), { class: 'iconbtn star', 'aria-pressed': String(fav) }),
+          act('download', 'Скачать GPX', () => downloadRoute(r.name, r.coords, r.length, r.loop)),
+          edited ? act('undo', 'Отменить шаг', () => app.ropeUndo()) : null,
+          edited ? act('reset', 'Сбросить правки', () => app.ropeReset()) : null) : null));
     });
-    $('#more').hidden = !S.routes.length;
   }
   /* «Изменён вручную: 2 притяжения, 1 отталкивание» */
   function editsLine(r) {
@@ -599,7 +568,13 @@ export function initRoutePanel(app) {
       if (o.opacity !== undefined) app.gl.paint(layerId, 'line-opacity', o.opacity);
     }
   });
+  /* r.lines — несколько линий без меток (пробежка из библиотеки) */
   function drawLine(r, fit) {
+    if (r.lines) {
+      app.gl.lines('route', r.lines);
+      if (fit) map.fitBounds(L.latLngBounds(r.lines.flat()), { padding: [40, 40] });
+      return { halo: glLine('route-halo'), line: glLine('route') };
+    }
     const coords = r.coords, ring = r.ringCoords || coords;
     app.gl.lines('approach', r.approachCoords ? [r.approachCoords] : []);
     app.gl.lines('route', [ring]);
@@ -636,14 +611,8 @@ export function initRoutePanel(app) {
     toast('GPX сохранён. Откройте его в Organic Maps или другом навигаторе.');
   }
   app.downloadRoute = downloadRoute;
-  function markRoute(i) {
-    const r = S.routes[i]; if (!r) return;
-    const t = app.addTrack('route', [r.coords], { name: r.name + ' · ' + fmtKm(r.length) + ' км' });
-    if (t) toast('Улицы маршрута отмечены пройденными: новых ' + fmtKm(t.newKm) + ' км.');
-  }
 
-  app.on('theme', () => { drawRoutes(false); renderClosed(); });
-  app.on('blocks', renderClosed);
+  app.on('theme', () => drawRoutes(false));
   app.on('start', renderAB);
 
   syncPrefs(); renderAB(); renderForced();
