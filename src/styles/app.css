@@ -365,13 +365,23 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .rose .hub:hover { stroke: var(--ink); }
 .chip.dist { background: var(--carmine-tint); border-color: var(--carmine); color: var(--carmine-strong); }
 
-.leaflet-zones-pane path.district { stroke: var(--ink-muted); stroke-opacity: .7; stroke-width: 1.1; fill: var(--ink); fill-opacity: 0; transition: fill-opacity .18s, stroke .18s, stroke-width .18s; }
-.leaflet-zones-pane path.district.leaflet-interactive:hover { fill-opacity: .07; stroke: var(--ink); stroke-opacity: 1; stroke-width: 1.8; }
-.leaflet-zones-pane path.district.sel { fill: var(--carmine); fill-opacity: .14; stroke: var(--carmine); stroke-opacity: 1; stroke-width: 2; }
-.leaflet-zones-pane path.district.sel.leaflet-interactive:hover { fill-opacity: .22; }
+.leaflet-pane path.district { stroke: var(--ink-muted); stroke-opacity: .7; stroke-width: 1.1; fill: var(--ink); fill-opacity: 0; transition: fill-opacity .18s, stroke .18s, stroke-width .18s; }
+.leaflet-pane path.district.leaflet-interactive:hover { fill-opacity: .07; stroke: var(--ink); stroke-opacity: 1; stroke-width: 1.8; }
+.leaflet-pane path.district.sel { fill: var(--carmine); fill-opacity: .14; stroke: var(--carmine); stroke-opacity: 1; stroke-width: 2; }
+.leaflet-pane path.district.sel.leaflet-interactive:hover { fill-opacity: .22; }
 .leaflet-zones-pane path.cone { fill: var(--carmine); fill-opacity: .08; stroke: none; }
 .leaflet-zones-pane path.needle { stroke: var(--carmine); stroke-width: 2.5; stroke-linecap: round; fill: none; }
 .mk-handle { width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 3px solid var(--carmine); box-shadow: 0 0 0 2px var(--paper); cursor: grab; }
 .mk-dlabel { transform: translate(-50%, -50%); white-space: nowrap; padding: 2px 9px; border-radius: 10px; background: var(--surface); border: 1px solid var(--carmine); color: var(--carmine-strong); font: 500 12px/16px var(--font-sans); width: max-content; pointer-events: none; }
 .leaflet-tooltip.dtip { background: var(--ink); color: var(--paper); border: 0; box-shadow: none; font: 500 12px var(--font-sans); padding: 3px 8px; border-radius: 6px; }
 .leaflet-tooltip.dtip::before { display: none; }
+
+/* ---------- этап 5: верёвка ---------- */
+.leaflet-pane path.rope-hit { stroke: transparent; fill: none; stroke-width: 18px; cursor: grab; }
+.leaflet-pane path.rope-hit:active { cursor: grabbing; }
+.leaflet-zones-pane path.repel { fill: var(--carmine); fill-opacity: .06; stroke: var(--carmine); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.mk-bead { width: 14px; height: 14px; border-radius: 50%; background: var(--carmine); border: 2.5px solid var(--paper); box-shadow: 0 0 0 1px var(--carmine); cursor: grab; }
+.mk-repel { width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 2px solid var(--carmine); position: relative; cursor: grab; }
+.mk-repel::after { content: ""; position: absolute; left: 3px; right: 3px; top: 5px; height: 2px; border-radius: 1px; background: var(--carmine); }
+.mk-rhandle { width: 10px; height: 10px; border-radius: 50%; background: var(--surface); border: 1.5px solid var(--carmine); cursor: ew-resize; }
+.route .edited { grid-column: 1 / -1; color: var(--carmine-strong); font-size: 12px; line-height: 16px; }

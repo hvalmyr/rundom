@@ -406,7 +406,7 @@ export function initRoutePanel(app) {
   $('#go').addEventListener('click', generate);
 
   async function runGenerator(o, count, ac, from) {
-    const gen = Core.createGenerator(o.g, { ...o, count, seed: (Math.random() * 1e9) | 0, maxAttempts: 200 });
+    const gen = Core.createGenerator(o.g, { ...o, count, seed: (Math.random() * 1e9) | 0, maxAttempts: o.maxAttempts || 200 });
     if (gen.state.error === 'dir') throw new Error('В направлении ' + o.dirLabel + ' от старта нет улиц в загруженной зоне. Поверните стрелку или расширьте точность.');
     if (gen.state.error === 'districts') {
       throw new Error(gen.state.unreachable.length
@@ -520,12 +520,26 @@ export function initRoutePanel(app) {
           r.approach > 0 ? 'подводка 2 × ' + Math.round(r.approach / 10) * 10 + ' м' : ''
         ].filter(Boolean).join(' · ')),
         notes.length ? el('div', { class: 'note' }, notes.join('. ')) : null,
+        editsLine(r),
         i === S.sel ? el('div', { class: 'actions' },
           el('button', { class: 'btn small', type: 'button', onclick: (e) => { e.stopPropagation(); downloadRoute(r.name, r.coords, r.length, r.loop); } }, 'Скачать GPX'),
-          el('button', { class: 'btn small', type: 'button', onclick: (e) => { e.stopPropagation(); markRoute(i); } }, 'Отметить пройденным')) : null));
+          el('button', { class: 'btn small', type: 'button', onclick: (e) => { e.stopPropagation(); markRoute(i); } }, 'Отметить пройденным'),
+          r.history && r.history.length ? el('button', { class: 'btn small', type: 'button', onclick: (e) => { e.stopPropagation(); app.ropeUndo(); } }, 'Отменить шаг') : null,
+          r.history && r.history.length ? el('button', { class: 'btn small ghost', type: 'button', onclick: (e) => { e.stopPropagation(); app.ropeReset(); } }, 'Сбросить правки') : null) : null));
     });
     $('#more').hidden = !S.routes.length;
   }
+  /* «Изменён вручную: 2 притяжения, 1 отталкивание» */
+  function editsLine(r) {
+    const e = r.edits;
+    if (!e || (!e.pulls.length && !e.repels.length)) return null;
+    const pl = (n, a, b, c) => n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? a : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? b : c));
+    const parts = [];
+    if (e.pulls.length) parts.push(pl(e.pulls.length, 'притяжение', 'притяжения', 'притяжений'));
+    if (e.repels.length) parts.push(pl(e.repels.length, 'отталкивание', 'отталкивания', 'отталкиваний'));
+    return el('div', { class: 'edited' }, 'Изменён вручную: ' + parts.join(', '));
+  }
+
   function selectRoute(i) {
     if (S.sel === i) return;
     S.sel = i; renderResults(); drawRoutes(false);
@@ -539,25 +553,30 @@ export function initRoutePanel(app) {
       layers.routes.addLayer(L.polyline(r.coords, { color: muted, weight: 3, opacity: 0.45 }).on('click', () => selectRoute(i)));
     });
     const r = S.routes[S.sel];
-    if (r) drawLine(r, fit);
+    S.routeLayers = r ? drawLine(r, fit) : null;
+    app.emit('routeDrawn');
   }
   /* r: {coords, ringCoords?, approachCoords?} — кольцо сплошной линией, подводка пунктиром из точек */
   function drawLine(r, fit) {
     const route = cssVar('map-route'), paper = cssVar('paper');
     const coords = r.coords, ring = r.ringCoords || coords;
+    const out = {};
     if (r.approachCoords) layers.routes.addLayer(L.polyline(r.approachCoords, { color: route, weight: 3.5, opacity: 1, dashArray: '0.1 7', interactive: false, lineCap: 'round' }));
-    layers.routes.addLayer(L.polyline(ring, { color: paper, weight: 9, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }));
-    layers.routes.addLayer(L.polyline(ring, { color: route, weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }));
+    out.halo = L.polyline(ring, { color: paper, weight: 9, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' });
+    out.line = L.polyline(ring, { color: route, weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' });
+    layers.routes.addLayer(out.halo); layers.routes.addLayer(out.line);
     for (const mk of Core.kmMarkers(coords, store.prefs.kmStep * 1000)) {
       layers.km.addLayer(L.marker([mk.lat, mk.lon], { icon: divIcon('mk-km', 24, 24, Core.fmtKm(mk.km)), interactive: false, keyboard: false }));
     }
     if (fit) map.fitBounds(L.latLngBounds(coords), { padding: [40, 40] });
+    return out;
   }
   /* Показать сохранённый маршрут: снимает выбор с текущих вариантов. */
   app.showLine = (r) => {
     S.sel = -1; renderResults();
     layers.routes.clearLayers(); layers.km.clearLayers();
     drawLine(Array.isArray(r) ? { coords: r } : r, true);
+    S.routeLayers = null; app.emit('routeDrawn');
   };
 
   function downloadRoute(name, coords, length, loop) {
@@ -583,4 +602,5 @@ export function initRoutePanel(app) {
   if (store.A) $('#qA').value = store.A.label || coordText(store.A);
   if (store.B) $('#qB').value = store.B.label || coordText(store.B);
   app.generate = generate;
+  Object.assign(app, { say, setBusy, braid, runGenerator, renderResults, drawRoutes, fmtKm });
 }

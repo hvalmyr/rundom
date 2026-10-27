@@ -13,11 +13,12 @@ import { initRoutePanel } from './ui/route-panel.js';
 import { initHome } from './ui/home.js';
 import { initBlocks } from './ui/blocks.js';
 import { initDirection } from './ui/direction.js';
+import { initRope } from './ui/rope.js';
 import { initLibraryPanel } from './ui/library-panel.js';
 import { initProgressPanel } from './ui/progress-panel.js';
 import { initSettings } from './ui/settings.js';
 
-const { map, layers, svg, setTiles, toggleLayer } = createMap();
+const { map, layers, svg, svgTop, setTiles, toggleLayer } = createMap();
 
 const dbError = () => toast('Браузер не даёт сохранить данные. Скачайте копию в настройках.');
 const tracks = collection('tracks', dbError);
@@ -33,7 +34,7 @@ if (store.explored.length) {
 
 const listeners = {};
 const app = {
-  map, layers, svg, setTiles, tracks, favorites,
+  map, layers, svg, svgTop, setTiles, tracks, favorites,
   S: {
     mode: null, routes: [], sel: -1, net: null, graph: null, graphKey: '', router: null,
     osmPois: [], forced: [], busy: false, abort: null, lastGen: null
@@ -77,6 +78,7 @@ initHome(app);
 initBlocks(app);
 initDirection(app);
 initRoutePanel(app);
+initRope(app);
 initLibraryPanel(app);
 initProgressPanel(app);
 initSettings(app);

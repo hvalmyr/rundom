@@ -107,7 +107,7 @@ export function initDirection(app) {
     for (const d of index.list) {
       const on = sel.has(d.id);
       if (!on && !picking()) continue;
-      const poly = L.polygon(d.p, { renderer: svg, className: 'district' + (on ? ' sel' : ''), interactive: picking() });
+      const poly = L.polygon(d.p, { renderer: picking() ? app.svgTop : svg, className: 'district' + (on ? ' sel' : ''), interactive: picking() });
       if (picking()) {
         poly.bindTooltip(d.n, { sticky: true, direction: 'top', offset: [0, -8], className: 'dtip' });
         poly.on('click', (e) => { L.DomEvent.stop(e); toggle(d.id); });

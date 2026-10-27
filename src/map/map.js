@@ -76,6 +76,12 @@ export function createMap() {
     '<defs><pattern id="rd-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
     '<line x1="0" y1="0" x2="0" y2="7" style="stroke:var(--carmine);stroke-width:1.6;opacity:.5"/></pattern></defs>');
 
+  /* интерактивное поверх canvas-слоя маршрутов: выбор районов, захват линии маршрута */
+  map.createPane('top');
+  map.getPane('top').style.zIndex = 420;
+  const svgTop = L.svg({ pane: 'top', padding: 0.3 });
+  map.addLayer(svgTop);
+
   const layers = {};
   ['districts', 'zones', 'compass', 'explored', 'closed', 'gates', 'blocks', 'osm', 'routes', 'draft', 'km', 'home', 'ab'].forEach((k) => { layers[k] = L.layerGroup().addTo(map); });
 
@@ -91,5 +97,5 @@ export function createMap() {
     if (!on && map.hasLayer(layer)) map.removeLayer(layer);
   }
 
-  return { map, layers, svg, setTiles, toggleLayer };
+  return { map, layers, svg, svgTop, setTiles, toggleLayer };
 }

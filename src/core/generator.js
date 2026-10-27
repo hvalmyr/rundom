@@ -86,13 +86,21 @@ function scoreRoute(m, prefs, err, overlap) {
    o.dir = {bearing, spread} — самая дальняя точка кольца лежит в секторе bearing ± spread градусов.
    o.districts = {zones:[{name, test(x,y)}], mode:'one'|'all', strict} — дальняя точка в районе;
    'one' — каждый вариант уходит в один случайный район, 'all' — кольцо проходит через все;
-   strict — между первым входом в районы и последним выходом кольцо не покидает их. */
+   strict — между первым входом в районы и последним выходом кольцо не покидает их.
+   o.prefer — рёбра прежнего маршрута (правка «верёвкой»): по ним идти чуть выгоднее,
+   из найденных берётся самый похожий на прежний. */
 function createGenerator(g, o) {
   var rng = mulberry32(o.seed || 1);
   var router = makeRouter(g);
   var prefs = o.prefs || {};
   var cost = buildCost(g, prefs);
-  var strictCost = null;
+  var strictCost = null, preferMask = null, preferLen = 0;
+  if (o.prefer && o.prefer.length) {
+    /* дороже всё, что не лежит на прежнем маршруте: стоимость не меньше длины, A* остаётся честным */
+    preferMask = new Uint8Array(g.E);
+    o.prefer.forEach(function (e) { if (!preferMask[e]) { preferMask[e] = 1; preferLen += g.eLen[e]; } });
+    for (var pe = 0; pe < g.E; pe++) if (!preferMask[pe]) cost[pe] *= 1.25;
+  }
   var A = o.A, B = o.B, L = o.length, tol = o.tol === undefined ? 0.08 : o.tol;
   var forced = (o.forced || []).filter(function (v) { return v !== A && v !== B; });
   var comp = g.comp[A];
@@ -218,7 +226,10 @@ function createGenerator(g, o) {
   var dirRejects = 0;
 
   function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
+  /* o.keep — опорные точки прежнего варианта: при правке «верёвкой» берутся чаще остальных */
+  var keep = (o.keep || []).filter(function (v) { return g.comp[v] === comp; });
   function pickVia() {
+    if (keep.length && rng() < 0.6) return pick(keep);
     if (attract.length && rng() < 0.4) return pick(attract);
     return pick(pool);
   }
@@ -405,6 +416,12 @@ function createGenerator(g, o) {
     pool1.forEach(function (r) {
       r.metrics = analyzeRoute(g, r.nodes, r.edges, prefs);
       r.score = scoreRoute(r.metrics, prefs, r.err, r.overlap);
+      if (preferMask) {
+        var shared = 0;
+        for (var i = 0; i < r.edges.length; i++) if (preferMask[r.edges[i]]) shared += g.eLen[r.edges[i]];
+        r.similar = Math.min(1, shared / Math.max(1, r.length + preferLen - shared));
+        r.score += 80 * r.similar;
+      }
     });
     pool1.sort(function (a, b) {
       var ea = a.err <= tol ? 0 : 1, eb = b.err <= tol ? 0 : 1;

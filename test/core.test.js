@@ -152,3 +152,19 @@ test('districts: one random district per variant, strict keeps the ring inside',
   assert.equal(far.state.error, 'districts');
   assert.deepEqual(far.state.unreachable.map((u) => u.name), ['Далеко']);
 });
+
+test('rope edit: the re-fitted ring goes through the pulled point and stays close to the old one', () => {
+  const g = Core.buildGraph(Core.parseNetwork(gridNetwork()), {});
+  Core.applyContext(g, { parks: [], pois: [] });
+  const A = Core.nearestNode(g, 55.758, 37.616, 200, 10).node;
+  const base = { A, B: A, length: 4000, tol: 0.1, count: 1, seed: 9, maxAttempts: 150 };
+  const run = (o) => { const gen = Core.createGenerator(g, o); while (!gen.run(50)); return gen.results().routes[0]; };
+  const first = run(base);
+  const pull = first.nodes[Math.floor(first.nodes.length / 3)];
+  const near = g.adjEdge[g.adjStart[pull]];
+  const moved = g.eF[near] === pull ? g.eT[near] : g.eF[near];
+  const next = run({ ...base, seed: 10, forced: [moved], prefer: first.edges });
+  assert.ok(next.nodes.includes(moved), 'goes through the pulled point');
+  assert.ok(next.similar > 0.3, 'similar ' + next.similar);
+  assert.ok(Math.abs(next.length - 4000) / 4000 <= 0.35);
+});
