@@ -24,15 +24,16 @@ export function initHome(app) {
   function render() {
     layers.home.clearLayers();
     const on = homeMode();
-    $('#homeBox').hidden = !on; $('#pointBox').hidden = on; $('#kmHint').hidden = !on;
+    $('#homeBox').hidden = !on; $('#pointBox').hidden = on;
     syncSeg($('#startSeg'), 'start', store.prefs.startMode);
     const h = store.home, n = store.exits.length;
     $('#homeInfo').textContent = h
       ? 'Дом · ' + (n ? n + ' ' + plural(n, 'выход', 'выхода', 'выходов') : 'выход у дома')
       : 'Дом не отмечен';
-    $('#homeEdit').textContent = h ? 'Изменить' : 'Отметить';
+    $('#homeAct').textContent = h ? 'Изменить' : 'Отметить дом';
     $('#ringInfo').textContent = store.ringStart ? 'Старт кольца задан вручную' : 'Старт кольца выбирает генератор';
     $('#ringInfo').classList.toggle('muted', !store.ringStart);
+    $('#ringAct').textContent = store.ringStart ? 'Изменить' : 'Указать старт кольца';
     $('#ringClear').hidden = !store.ringStart;
     $('#approachMax').value = store.prefs.approachMax;
     $('#outApproach').textContent = store.prefs.approachMax ? store.prefs.approachMax + ' м' : 'без подводки';

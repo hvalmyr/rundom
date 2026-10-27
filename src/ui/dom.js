@@ -21,6 +21,16 @@ export function el(tag, attrs, ...children) {
   return n;
 }
 
+/* Иконки для кнопок в строках списков. */
+export const ICON = {
+  show: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  remove: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+};
+/* Кнопка-иконка с подписью для экранного диктора и подсказкой. */
+export const iconBtn = (icon, label, onclick, ghost) =>
+  el('button', { class: 'iconbtn' + (ghost ? ' ghost' : ''), type: 'button', 'aria-label': label, title: label, html: ICON[icon], onclick });
+
 export const tick = () => new Promise((r) => setTimeout(r, 0));
 export const fmt1 = (x) => (Math.round(x * 10) / 10).toFixed(1).replace('.', ',');
 export const fmtKm = (m) => fmt1(m / 1000);

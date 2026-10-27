@@ -2,7 +2,7 @@
 import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { cssVar, divIcon } from '../map/map.js';
-import { $, el, fmtKm, uid, round5, toast, renameable } from './dom.js';
+import { $, el, fmtKm, uid, round5, toast, renameable, iconBtn } from './dom.js';
 
 const KIND = { gpx: 'GPX', route: 'маршрут', manual: 'вручную' };
 const fmtDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
@@ -27,12 +27,10 @@ export function initLibraryPanel(app) {
         el('div', { class: 'grow' },
           renameIn(f, favorites),
           el('div', { class: 'meta' }, fmtKm(f.length) + ' км · ' + Math.round((f.newShare || 0) * 100) + '% новых · ' + fmtDate(f.created))),
-        el('button', { class: 'btn small', type: 'button', onclick: () => { app.showLine(f); app.sheet.peek(); } }, 'Показать'),
-        el('button', { class: 'btn small', type: 'button', onclick: () => app.downloadRoute(f.name, f.coords, f.length, f.loop) }, 'GPX'),
-        el('button', {
-          class: 'btn small ghost', type: 'button', 'aria-label': 'Удалить ' + f.name,
-          onclick: () => { favorites.remove(f.id); render(); app.emit('favorites'); }
-        }, 'Удалить')));
+        el('div', { class: 'acts' },
+          iconBtn('show', 'Показать на карте', () => { app.showLine(f); app.sheet.peek(); }),
+          iconBtn('download', 'Скачать GPX', () => app.downloadRoute(f.name, f.coords, f.length, f.loop)),
+          iconBtn('remove', 'Удалить ' + f.name, () => { favorites.remove(f.id); render(); app.emit('favorites'); }, true))));
     }
     if (!favorites.items.length) list.appendChild(el('p', { class: 'empty' }, 'Нажмите на звёздочку у варианта маршрута, чтобы сохранить его здесь.'));
   }
@@ -53,11 +51,9 @@ export function initLibraryPanel(app) {
       meta.push(KIND[t.kind] || '');
       list.appendChild(el('div', { class: 'item' },
         el('div', { class: 'grow' }, renameIn(t, tracks), el('div', { class: 'meta' }, meta.join(' · '))),
-        el('button', { class: 'btn small', type: 'button', onclick: () => { fitLines(t.lines); app.sheet.peek(); } }, 'Показать'),
-        el('button', {
-          class: 'btn small ghost', type: 'button', 'aria-label': 'Удалить ' + t.name,
-          onclick: () => { tracks.remove(t.id); render(); }
-        }, 'Удалить')));
+        el('div', { class: 'acts' },
+          iconBtn('show', 'Показать на карте', () => { fitLines(t.lines); app.sheet.peek(); }),
+          iconBtn('remove', 'Удалить ' + t.name, () => { tracks.remove(t.id); render(); }, true))));
     }
     if (!tracks.items.length) list.appendChild(el('p', { class: 'empty' }, 'Загрузите GPX своих пробежек или отметьте улицы вручную.'));
   }

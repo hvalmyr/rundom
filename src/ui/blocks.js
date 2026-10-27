@@ -4,7 +4,7 @@ import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { divIcon } from '../map/map.js';
-import { $, el, uid, round5, toast, renameable } from './dom.js';
+import { $, el, uid, round5, toast, renameable, iconBtn } from './dom.js';
 
 const CROSS = '<svg viewBox="0 0 8 8" aria-hidden="true"><path d="M1 1l6 6M7 1L1 7"/></svg>';
 const BAR = '<svg viewBox="0 0 8 8" aria-hidden="true"><path d="M1 4h6M1 1v6M7 1v6"/></svg>';
@@ -45,7 +45,7 @@ export function initBlocks(app) {
     return el('div', { class: 'item' + (entry.on === false ? ' off' : '') },
       extra || el('span', { class: 'kind', html: kind }),
       el('div', { class: 'grow' }, renameable(entry.name, (v) => { entry.name = v; save(); })),
-      el('button', { class: 'btn small ghost', type: 'button', 'aria-label': 'Удалить ' + entry.name, onclick: onDelete }, 'Удалить'));
+      iconBtn('remove', 'Удалить ' + entry.name, onDelete, true));
   }
   function renderList() {
     const list = $('#blocksList');

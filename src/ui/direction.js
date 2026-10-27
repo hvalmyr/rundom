@@ -60,10 +60,6 @@ export function initDirection(app) {
       const a = (P.dirBearing - 90) * Math.PI / 180;
       rose.appendChild(svgEl('line', { class: 'needle', x1: (21 * Math.cos(a)).toFixed(1), y1: (21 * Math.sin(a)).toFixed(1), x2: (60 * Math.cos(a)).toFixed(1), y2: (60 * Math.sin(a)).toFixed(1) }));
     }
-    const hub = svgEl('circle', { r: 17, class: 'hub', role: 'button', tabindex: '0', 'aria-label': 'Любое направление' });
-    hub.addEventListener('click', () => { P.dirMode = 'any'; changed(); });
-    rose.appendChild(hub);
-    rose.appendChild(svgEl('text', { y: 3.5, 'text-anchor': 'middle' }, 'любое'));
     $('#outSpread').textContent = '±' + P.dirSpread + '°';
     $('#dirSpread').value = P.dirSpread;
   }

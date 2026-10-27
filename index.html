@@ -32,22 +32,18 @@
     <section class="tabpane" id="pane-route" role="tabpanel" aria-labelledby="tab-route">
       <div class="field">
         <span class="lbl" id="startLbl">Старт</span>
-        <div class="seg fill" id="startSeg" role="group" aria-labelledby="startLbl">
+        <div class="seg" id="startSeg" role="group" aria-labelledby="startLbl">
           <button type="button" data-start="home">От дома</button><button type="button" data-start="point">Своя точка</button>
         </div>
       </div>
 
       <div class="homebox" id="homeBox">
         <div class="homerow">
-          <span class="dot-house" aria-hidden="true"></span>
-          <span class="grow" id="homeInfo">Дом не отмечен</span>
-          <button class="btn small" id="homeEdit" type="button">Отметить</button>
+          <button class="btn pick" id="homeEdit" type="button"><span class="dot-house" aria-hidden="true"></span><span class="val" id="homeInfo">Дом не отмечен</span><span class="act" id="homeAct">Отметить</span></button>
         </div>
         <div class="homerow">
-          <span class="dot-ring" aria-hidden="true"></span>
-          <span class="grow muted" id="ringInfo">Старт кольца выбирает генератор</span>
-          <button class="btn small ghost" id="ringClear" type="button" hidden>Сбросить</button>
-          <button class="btn small" id="ringPick" type="button">Указать</button>
+          <button class="btn pick" id="ringPick" type="button"><span class="dot-ring" aria-hidden="true"></span><span class="val" id="ringInfo">Старт кольца выбирает генератор</span><span class="act" id="ringAct">Указать</span></button>
+          <button class="iconbtn" id="ringClear" type="button" hidden aria-label="Сбросить старт кольца" title="Сбросить"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
         <div class="slider">
           <label for="approachMax">Подводка не длиннее</label><output id="outApproach"></output>
@@ -118,13 +114,17 @@
       </div>
 
       <div class="field">
-        <span class="lbl" id="kmLbl">Дистанция, км <small id="kmHint" class="muted">вместе с подводкой</small></span>
+        <span class="lbl" id="kmLbl">Дистанция, км</span>
         <div class="chips" id="kmChips" role="group" aria-labelledby="kmLbl"></div>
-        <div class="row">
-          <span class="muted">Допуск</span>
-          <div class="seg fill" id="tolSeg" role="group" aria-label="Допустимое отклонение длины">
-            <button type="button" data-tol="0.05">±5%</button><button type="button" data-tol="0.08">±8%</button><button type="button" data-tol="0.12">±12%</button>
-          </div>
+      </div>
+
+      <div class="field">
+        <span class="lbl" id="tolLbl">Допуск</span>
+        <div class="seg" id="tolSignSeg" role="group" aria-label="В какую сторону может отличаться длина">
+          <button type="button" data-sign="plus" aria-label="Только длиннее">+</button><button type="button" data-sign="minus" aria-label="Только короче">−</button><button type="button" data-sign="both" aria-label="В обе стороны">±</button>
+        </div>
+        <div class="seg" id="tolSeg" role="group" aria-label="Насколько может отличаться длина">
+          <button type="button" data-tol="0.03">3%</button><button type="button" data-tol="0.05">5%</button><button type="button" data-tol="0.08">8%</button>
         </div>
       </div>
 

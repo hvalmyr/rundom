@@ -103,10 +103,11 @@ export function initRoutePanel(app) {
     }, () => toast('Не удалось определить местоположение.'), { enableHighAccuracy: true, timeout: 10000 });
   });
 
-  /* ---------- дистанция: свои пресеты и своё значение ---------- */
+  /* ---------- дистанция: быстрые пресеты; «+» превращается в поле, Enter сохраняет ---------- */
   function renderKm() {
     const box = $('#kmChips');
     const p = store.prefs;
+    if (!p.kmPresets.includes(p.km)) p.kmPresets = [...p.kmPresets, p.km].sort((a, b) => a - b);
     box.innerHTML = '';
     for (const km of p.kmPresets) {
       const chip = el('button', {
@@ -124,32 +125,52 @@ export function initRoutePanel(app) {
       ['pointerup', 'pointerleave', 'pointercancel'].forEach((t) => chip.addEventListener(t, () => clearTimeout(press)));
       box.appendChild(chip);
     }
-    const custom = !p.kmPresets.includes(p.km);
-    const input = el('input', {
-      id: 'km', type: 'text', inputmode: 'decimal', placeholder: 'своя', 'aria-label': 'Своя дистанция, км',
-      value: custom ? fmtNum(p.km) : ''
-    });
-    const parse = () => {
-      const v = parseFloat(input.value.replace(',', '.'));
-      return v >= 1 && v <= 60 ? Math.round(v * 10) / 10 : null;
-    };
-    input.addEventListener('input', () => {
-      const v = parse();
-      if (v === null) return;
-      p.km = v; save(); app.emit('km');
-      box.querySelectorAll('.chip[aria-pressed]').forEach((c) => c.setAttribute('aria-pressed', 'false'));
-    });
     const add = el('button', {
-      class: 'chip add', type: 'button', 'aria-label': 'Сохранить дистанцию в быстрые', title: 'Сохранить в быстрые',
+      class: 'chip add', type: 'button', 'aria-label': 'Добавить дистанцию', title: 'Добавить дистанцию',
       onclick: () => {
-        const v = parse();
-        if (v === null) { toast('Введите дистанцию от 1 до 60 км.'); input.focus(); return; }
-        if (!p.kmPresets.includes(v)) p.kmPresets = [...p.kmPresets, v].sort((a, b) => a - b);
-        p.km = v; renderKm(); save();
+        const input = el('input', { id: 'km', type: 'text', inputmode: 'decimal', placeholder: 'км', 'aria-label': 'Новая дистанция, км, Enter — сохранить' });
+        let done = false;
+        const finish = (keep) => {
+          if (done) return;
+          done = true;
+          const v = parseFloat(input.value.replace(',', '.'));
+          if (keep && input.value.trim()) {
+            if (!(v >= 1 && v <= 60)) { toast('Введите дистанцию от 1 до 60 км.'); done = false; input.select(); return; }
+            const km = Math.round(v * 10) / 10;
+            if (!p.kmPresets.includes(km)) p.kmPresets = [...p.kmPresets, km].sort((a, b) => a - b);
+            p.km = km; save(); app.emit('km');
+          }
+          renderKm();
+          if (keep) $('#kmChips .chip.add').focus();
+        };
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+          if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        });
+        input.addEventListener('blur', () => finish(false));
+        add.replaceWith(el('label', { class: 'kmin' }, input));
+        input.focus();
       }
     }, '+');
-    box.appendChild(el('label', { class: 'kmin' }, input));
     box.appendChild(add);
+  }
+
+  /* ---------- допуск: в какую сторону и насколько ---------- */
+  const TOLS = [0.03, 0.05, 0.08], SIGN = { plus: '+', minus: '−', both: '±' };
+  function syncTol() {
+    const p = store.prefs;
+    if (!TOLS.includes(p.tol)) p.tol = 0.08;
+    if (!SIGN[p.tolSign]) p.tolSign = 'both';
+    syncSeg($('#tolSignSeg'), 'sign', p.tolSign);
+    syncSeg($('#tolSeg'), 'tol', p.tol);
+    $('#tolSeg').querySelectorAll('button').forEach((b) => { b.textContent = SIGN[p.tolSign] + Math.round(b.dataset.tol * 100) + '%'; });
+  }
+  /* Генератор ищет длину в окне ±tol вокруг цели: односторонний допуск сдвигает цель
+     в середину окна [L, L(1+t)] или [L(1−t), L] и вдвое сужает окно. */
+  function lengthWindow(Lm, t, sign) {
+    if (sign === 'both') return { length: Lm, tol: t };
+    const k = sign === 'plus' ? 1 : -1, mid = Lm * (1 + k * t / 2);
+    return { length: mid, tol: (Lm * t / 2) / mid };
   }
 
   /* ---------- предпочтения ---------- */
@@ -163,7 +184,7 @@ export function initRoutePanel(app) {
   function syncPrefs() {
     const p = store.prefs;
     renderKm();
-    syncSeg($('#tolSeg'), 'tol', p.tol);
+    syncTol();
     $('#loop').checked = p.loop; $('#fieldB').hidden = p.loop;
     $('#prefMain').value = p.main; $('#prefAppeal').value = p.appeal; $('#prefNovelty').value = p.novelty; $('#prefPoi').value = p.poi;
     $('#avoidSteps').checked = p.avoidSteps; $('#allowRepeats').checked = p.allowRepeats; $('#strictGates').checked = p.strictGates;
@@ -193,7 +214,11 @@ export function initRoutePanel(app) {
   bindPref('#pace', 'pace');
   $('#tolSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    store.prefs.tol = parseFloat(b.dataset.tol); syncSeg($('#tolSeg'), 'tol', store.prefs.tol); save();
+    store.prefs.tol = parseFloat(b.dataset.tol); syncTol(); save();
+  });
+  $('#tolSignSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    store.prefs.tolSign = b.dataset.sign; syncTol(); save();
   });
 
   function paceMin() {
@@ -363,7 +388,7 @@ export function initRoutePanel(app) {
       const direction = await app.directionSpec();
       S.lastGen = {
         dir: direction && direction.dir, districts: direction && direction.districts, dirLabel: direction && direction.label,
-        g, A: sA.node, B: sB.node, length: Lm, tol: prefs.tol, forced, attract, loop,
+        g, A: sA.node, B: sB.node, ...lengthWindow(Lm, prefs.tol, prefs.tolSign), target: Lm, forced, attract, loop,
         exits, ringStart: ringNode, approachMax: prefs.approachMax, noRepeat: !prefs.allowRepeats,
         prefs: { appeal: prefs.appeal / 100, mainAvoid: prefs.main / 100, novelty: prefs.novelty / 100, poi: prefs.poi / 100 }
       };
@@ -410,7 +435,7 @@ export function initRoutePanel(app) {
     if (gen.state.error === 'dir') throw new Error('В направлении ' + o.dirLabel + ' от старта нет улиц в загруженной зоне. Поверните стрелку или расширьте точность.');
     if (gen.state.error === 'districts') {
       throw new Error(gen.state.unreachable.length
-        ? unreachableText(gen.state.unreachable, o.length) + ' Измените дистанцию или районы.'
+        ? unreachableText(gen.state.unreachable, o.target || o.length) + ' Измените дистанцию или районы.'
         : 'В выбранных районах нет улиц в зоне загрузки. Выберите районы ближе к старту.');
     }
     if (gen.state.error === 'exits') throw new Error('От выходов из дома некуда начать кольцо. Увеличьте предел подводки или проверьте зоны рядом с домом.');

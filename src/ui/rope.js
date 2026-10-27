@@ -267,13 +267,13 @@ export function initRope(app) {
       const ok = res.routes.filter((x) => !x.off);
       const nr = ok.length ? ok[0] : res.routes.reduce((b, x) => (!b || x.err < b.err ? x : b), null);
       if (!nr) {
-        app.say('С этой правкой кольцо ' + app.fmtKm(o.length) + ' км не получилось. Правка не применена.', 'warn');
+        app.say('С этой правкой кольцо ' + app.fmtKm(o.target || o.length) + ' км не получилось. Правка не применена.', 'warn');
       } else {
         nr.edits = { pulls: next.pulls, repels: next.repels };
         nr.history = [...(r.history || []), r];
         S.routes[S.sel] = nr;
         app.say(nr.off
-          ? 'С этой правкой кольцо ' + app.fmtKm(o.length) + ' км не укладывается: ближайший вариант ' + app.fmtKm(nr.length) + ' км. «Отменить шаг» вернёт прежний маршрут.'
+          ? 'С этой правкой кольцо ' + app.fmtKm(o.target || o.length) + ' км не укладывается: ближайший вариант ' + app.fmtKm(nr.length) + ' км. «Отменить шаг» вернёт прежний маршрут.'
           : 'Маршрут перестроен: ' + app.fmtKm(nr.length) + ' км.', nr.off ? 'warn' : '');
         app.renderResults(); app.drawRoutes(false);
       }

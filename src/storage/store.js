@@ -9,7 +9,7 @@ const DEFAULTS = {
   /* дом и выходы, ручной старт кольца; закрытия, зоны и открытые на деле ворота OSM */
   home: null, exits: [], ringStart: null, blocks: [], zones: [], openGates: [],
   prefs: {
-    km: 10, kmPresets: [5, 10, 15, 21.1], tol: 0.08, loop: true,
+    km: 10, kmPresets: [5, 10, 15, 21.1], tol: 0.08, tolSign: 'both', loop: true,
     startMode: 'home', approachMax: 1000, allowRepeats: false,
     dirMode: 'any', dirBearing: 0, dirSpread: 30, districts: [], distStrict: false, distMulti: 'one',
     main: 60, appeal: 40, novelty: 0, poi: 50, avoidSteps: true, strictGates: false, kmStep: 1, pace: '6:00'
