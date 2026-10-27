@@ -16,6 +16,10 @@
   --carmine-tint: #f6dee2;
   --on-carmine: #ffffff;
   --warning: #7a5200;
+  --action: var(--carmine);
+  --action-strong: var(--carmine-strong);
+  --action-tint: var(--carmine-tint);
+  --on-action: var(--on-carmine);
   --focus: var(--petrol);
   --danger: var(--carmine-strong);
   --map-ground: #ebebeb;

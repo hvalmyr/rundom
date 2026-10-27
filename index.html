@@ -156,14 +156,17 @@
           <label class="check"><input type="checkbox" id="allowRepeats"><span>Разрешить повторы улиц<small>Без галочки кольцо не проходит одну улицу дважды, считая обе её стороны</small></span></label>
           <label class="check"><input type="checkbox" id="avoidSteps"><span>Без лестниц</span></label>
           <label class="check"><input type="checkbox" id="strictGates"><span>Строго к шлагбаумам<small>Шлагбаумы с access=private считать закрытыми</small></span></label>
-          <div class="row">
-            <label class="muted" for="kmStep">Метки каждые</label>
+          <div class="setting">
+            <label for="kmStep">Метки на карте и в GPX</label>
             <select id="kmStep">
-              <option value="0.5">0,5 км</option><option value="1">1 км</option><option value="2">2 км</option><option value="5">5 км</option>
+              <option value="0.5">каждые 0,5 км</option><option value="1">каждый 1 км</option><option value="2">каждые 2 км</option><option value="5">каждые 5 км</option>
             </select>
-            <label class="muted" for="pace">темп</label>
-            <input id="pace" class="num" type="text" inputmode="numeric" value="6:00" size="5"><span class="muted">/км</span>
           </div>
+          <div class="setting">
+            <label for="pace">Темп</label>
+            <label class="unit"><input id="pace" class="num" type="text" inputmode="decimal" placeholder="6:00" value="6:00" autocomplete="off" aria-describedby="paceHint"><span>мин/км</span></label>
+          </div>
+          <p class="hint" id="paceHint">Для времени в карточках: 6:00 или 5,30.</p>
         </div>
       </details>
 

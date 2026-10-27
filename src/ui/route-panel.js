@@ -579,6 +579,7 @@ export function initRoutePanel(app) {
     });
     const r = S.routes[S.sel];
     S.routeLayers = r ? drawLine(r, fit) : null;
+    if (S.lineId) { S.lineId = null; app.emit('lineShown'); }
     app.emit('routeDrawn');
   }
   /* r: {coords, ringCoords?, approachCoords?} — кольцо сплошной линией, подводка пунктиром из точек */
@@ -596,11 +597,17 @@ export function initRoutePanel(app) {
     if (fit) map.fitBounds(L.latLngBounds(coords), { padding: [40, 40] });
     return out;
   }
-  /* Показать сохранённый маршрут: снимает выбор с текущих вариантов. */
-  app.showLine = (r) => {
+  /* Показать сохранённый маршрут: снимает выбор с текущих вариантов. id запоминается в S.lineId. */
+  app.showLine = (r, id = null) => {
     S.sel = -1; renderResults();
     layers.routes.clearLayers(); layers.km.clearLayers();
     drawLine(Array.isArray(r) ? { coords: r } : r, true);
+    S.lineId = id;
+    S.routeLayers = null; app.emit('routeDrawn');
+  };
+  app.hideLine = () => {
+    layers.routes.clearLayers(); layers.km.clearLayers();
+    S.lineId = null;
     S.routeLayers = null; app.emit('routeDrawn');
   };
 

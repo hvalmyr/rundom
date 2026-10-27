@@ -19,18 +19,29 @@ export function initLibraryPanel(app) {
 
   const renameIn = (entry, coll) => renameable(entry.name, (v) => { entry.name = v; entry.autoName = false; coll.update(entry); });
 
+  /* Кружок слева показывает маршрут на карте; виден только один, повторное нажатие убирает. */
+  function toggleShown(f) {
+    if (S.lineId === f.id) app.hideLine();
+    else { app.showLine(f, f.id); app.sheet.peek(); }
+    renderFavorites();
+  }
+
   function renderFavorites() {
     const list = $('#favList');
     list.innerHTML = '';
     for (const f of favorites.items.slice().reverse()) {
+      const on = S.lineId === f.id;
       list.appendChild(el('div', { class: 'item' },
+        el('button', { class: 'show-dot', type: 'button', 'aria-pressed': String(on), 'aria-label': (on ? 'Убрать с карты ' : 'Показать на карте ') + f.name, title: on ? 'Убрать с карты' : 'Показать на карте', onclick: () => toggleShown(f) }),
         el('div', { class: 'grow' },
           renameIn(f, favorites),
-          el('div', { class: 'meta' }, fmtKm(f.length) + ' км · ' + Math.round((f.newShare || 0) * 100) + '% новых · ' + fmtDate(f.created))),
+          el('div', { class: 'meta' }, fmtKm(f.length) + ' км · ' + fmtDate(f.created))),
         el('div', { class: 'acts' },
-          iconBtn('show', 'Показать на карте', () => { app.showLine(f); app.sheet.peek(); }),
-          iconBtn('download', 'Скачать GPX', () => app.downloadRoute(f.name, f.coords, f.length, f.loop)),
-          iconBtn('remove', 'Удалить ' + f.name, () => { favorites.remove(f.id); render(); app.emit('favorites'); }, true))));
+          iconBtn('download', 'Скачать GPX', () => app.downloadRoute(f.name, f.coords, f.length, f.loop), true),
+          iconBtn('remove', 'Удалить ' + f.name, () => {
+            if (S.lineId === f.id) app.hideLine();
+            favorites.remove(f.id); render(); app.emit('favorites');
+          }, true))));
     }
     if (!favorites.items.length) list.appendChild(el('p', { class: 'empty' }, 'Нажмите на звёздочку у варианта маршрута, чтобы сохранить его здесь.'));
   }
@@ -201,5 +212,6 @@ export function initLibraryPanel(app) {
 
   app.on('theme', renderTracks);
   app.on('favorites', renderFavorites);
+  app.on('lineShown', renderFavorites);
   render();
 }
