@@ -1,11 +1,15 @@
 /* Данные покрытия из выгрузки OpenStreetMap → <out>/index.json и <out>/d/<id>.json.
    Запуск: node scripts/data/build.mjs <Moscow.osm.pbf> [out=public/data].
    Что собирается: контур МКАД, пешеходные «улицы» районов внутри МКАД (тротуары и вторые
-   полосы проспектов присоединены к своей улице), объекты и парки, абзац «О районе» из Википедии. */
+   полосы проспектов присоединены к своей улице), объекты и парки, абзац «О районе» из Википедии.
+   Объекты и парки с платным или закрытым входом (fee, access) и всё внутри стен Кремля не берутся:
+   их не встретить на пробежке. У объектов со статьёй в Википедии — короткое описание и фото
+   из Wikimedia Commons с автором и лицензией. */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { dirname } from 'node:path';
 import { readPbf } from './pbf.mjs';
+import { placeInfo } from './wiki-places.mjs';
 import { classifyWay } from '../../src/core/osm.js';
 import { hav, px, py, simplifyDP, pointInRing, distToSegment, polyLength } from '../../src/core/geo.js';
 
@@ -23,7 +27,9 @@ const parkRels = [], districtTags = new Map();
 const districts = JSON.parse(readFileSync(new URL('../../src/data/districts.json', import.meta.url)));
 const districtIds = new Set(districts.map((d) => d.id));
 const CARRIER = { trunk: 1, primary: 1, secondary: 1, tertiary: 1 };
-const isPark = (t) => t && t.name && (t.leisure === 'park' || t.leisure === 'garden' || t.leisure === 'nature_reserve');
+/* вход платный или закрыт: на пробежке туда не попасть */
+const closedEntry = (t) => (t.fee && t.fee !== 'no') || /^(private|no|customers|permit|military|delivery)$/.test(t.access || '');
+const isPark = (t) => t && t.name && (t.leisure === 'park' || t.leisure === 'garden' || t.leisure === 'nature_reserve') && !closedEntry(t);
 let header = {};
 readPbf(FILE, {
   header(h) { header = h; },
@@ -65,7 +71,7 @@ const parks = [];         /* {name, rings, wiki} */
 const relWayGeom = new Map();
 
 function objectCategory(t) {
-  if (!t.name) return null;
+  if (!t.name || closedEntry(t)) return null;
   if (t.memorial === 'plaque' || t.memorial === 'stolperstein' || t.historic === 'boundary_stone') return null;
   if (t.tourism === 'viewpoint') return 'view';
   if (t.amenity === 'place_of_worship') return 'worship';
@@ -87,7 +93,7 @@ readPbf(FILE, {
     nId[nN] = id; nLat[nN] = lat; nLon[nN] = lon; nN++;
     if (t) {
       const cat = objectCategory(t);
-      if (cat) objects.push({ name: t.name, cat, p: [lat, lon], wiki: t.wikipedia || '' });
+      if (cat) objects.push({ name: t.name, cat, p: [lat, lon], wiki: t.wikipedia || '', wd: t.wikidata || '' });
     }
   },
   way(id, refs, t) {
@@ -99,13 +105,13 @@ readPbf(FILE, {
       return;
     }
     if (isPark(t) && refs.length > 3 && refs[0] === refs[refs.length - 1]) {
-      parks.push({ name: t.name, rings: [coords(refs)], wiki: t.wikipedia || '' });
+      parks.push({ name: t.name, rings: [coords(refs)], wiki: t.wikipedia || '', wd: t.wikidata || '' });
       return;
     }
     const cat = objectCategory(t);
     if (cat && refs.length) {
       const pts = coords(refs);
-      if (pts.length) objects.push({ name: t.name, cat, p: centroid(pts), wiki: t.wikipedia || '' });
+      if (pts.length) objects.push({ name: t.name, cat, p: centroid(pts), wiki: t.wikipedia || '', wd: t.wikidata || '' });
     }
     if (!hw || t.area === 'yes') return;
     /* ось большой улицы без права прохода (foot=no, trunk): опора для её тротуаров */
@@ -123,7 +129,7 @@ log('проход 2: узлов', nN, 'путей', ways.length, 'объекто
 for (const r of parkRels) {
   const segs = r.ways.map((w) => relWayGeom.get(w)).filter((g) => g && g.length > 1);
   const rings = stitch(segs);
-  if (rings.length) parks.push({ name: r.t.name, rings, wiki: r.t.wikipedia || '' });
+  if (rings.length) parks.push({ name: r.t.name, rings, wiki: r.t.wikipedia || '', wd: r.t.wikidata || '' });
 }
 nId = nLat = nLon = null;
 
@@ -350,13 +356,19 @@ for (const w of kept) {
 log('всего внутри МКАД', Math.round(total / 1000), 'км');
 
 /* ---------- объекты и парки ---------- */
+/* стены Кремля: вход на территорию по билетам, тегов fee у объектов внутри часто нет */
+const KREMLIN = [[55.7562, 37.6170], [55.7549, 37.6185], [55.7539, 37.6194], [55.7525, 37.6208], [55.7500, 37.6236],
+  [55.7488, 37.6138], [55.7495, 37.6117], [55.7531, 37.6133], [55.7562, 37.6170]].flatMap((p) => [px(p[1]), py(p[0])]);
+const inKremlin = (p) => pointInRing(px(p[1]), py(p[0]), KREMLIN);
 const dedup = [];
 const grid = new Map();
+let kremlinDropped = 0;
 for (const o of objects) {
   if (!inMkad(o.p[0], o.p[1])) continue;
+  if (inKremlin(o.p)) { kremlinDropped++; continue; }
   const k = gkey(px(o.p[1]), py(o.p[0]));
   const near = (grid.get(k) || []).find((q) => q.name === o.name && hav(q.p[0], q.p[1], o.p[0], o.p[1]) < 150);
-  if (near) { if (!near.wiki) near.wiki = o.wiki; continue; }
+  if (near) { if (!near.wiki) near.wiki = o.wiki; if (!near.wd) near.wd = o.wd; continue; }
   dedup.push(o); (grid.get(k) || grid.set(k, []).get(k)).push(o);
 }
 const sList = axis.filter((w) => !w.drop), sGrid = segGrid(sList);
@@ -370,11 +382,11 @@ for (const p of parks) {
   const outer = p.rings.slice().sort((a, b) => area(b) - area(a));
   if (area(outer[0]) < 10000) continue; /* меньше гектара — сквер, не парк */
   const c = centroid(outer[0]);
-  if (!inMkad(c[0], c[1])) continue;
+  if (!inMkad(c[0], c[1]) || inKremlin(c)) continue;
   if (parkList.some((q) => q.name === p.name && hav(q.c[0], q.c[1], c[0], c[1]) < 300)) continue;
-  parkList.push({ name: p.name, c, rings: outer.filter((r) => area(r) >= 2000).map((r) => simplifyDP(r, 8)), wiki: p.wiki, area: area(outer[0]) });
+  parkList.push({ name: p.name, c, rings: outer.filter((r) => area(r) >= 2000).map((r) => simplifyDP(r, 8)), wiki: p.wiki, wd: p.wd, area: area(outer[0]) });
 }
-log('объектов', dedup.length, 'парков', parkList.length);
+log('объектов', dedup.length, 'парков', parkList.length, 'убрано в Кремле', kremlinDropped);
 
 /* ---------- Википедия: первый абзац о районе ---------- */
 let cache = {};
@@ -408,6 +420,11 @@ function trimText(s) {
   return cutAt > 250 ? s.slice(0, cutAt + 1) : s.slice(0, 600).replace(/\s+\S*$/, '') + '…';
 }
 
+/* ---------- описания и фото мест ---------- */
+const withWiki = [...dedup, ...parkList].filter((q) => q.wiki || q.wd);
+const info = await placeInfo(withWiki, process.env.PLACES_CACHE || '.cache/places.json');
+log('мест со статьёй', withWiki.length, 'с описанием', info.size, 'с фото', [...info.values()].filter((x) => x.i).length);
+
 /* ---------- запись ---------- */
 const enc = (p, o) => [Math.round(p[0] * Q) - o[0], Math.round(p[1] * Q) - o[1]];
 function encLine(pts, o) {
@@ -434,9 +451,9 @@ for (let i = 0; i < districts.length; i++) {
   const tags = districtTags.get(d.id) || {};
   const about = (await wiki(tags.wikipedia || '')) || (await wiki('ru:' + d.n + ' (район Москвы)')) || (await wiki('ru:' + d.n + ' (район)'));
   const objs = dedup.filter((q) => districtAt(q.p[0], q.p[1]) === i)
-    .map((q) => ({ n: q.name, c: q.cat, p: enc(q.p, o), s: streetNear(q.p) || undefined }));
+    .map((q) => ({ n: q.name, c: q.cat, p: enc(q.p, o), s: streetNear(q.p) || undefined, w: info.get(q) }));
   const pk = parkList.filter((q) => districtAt(q.c[0], q.c[1]) === i)
-    .map((q) => ({ n: q.name, ha: Math.round(q.area / 1000) / 10, r: q.rings.map((r) => encLine(r, o)) }));
+    .map((q) => ({ n: q.name, ha: Math.round(q.area / 1000) / 10, r: q.rings.map((r) => encLine(r, o)), w: info.get(q) }));
   const file = {
     id: d.id, n: d.n, v: version, o,
     s: streets.map((s) => ({ n: s.n || undefined, t: s.t === 20 ? undefined : s.t, c: joinChains(s.chains).map((c) => encLine(c, o)) })),
