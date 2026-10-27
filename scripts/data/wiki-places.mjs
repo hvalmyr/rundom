@@ -33,7 +33,8 @@ function trim(s, max) {
   return cut > max / 3 ? s.slice(0, cut + 1) : s.slice(0, max).replace(/\s+\S*$/, '') + '…';
 }
 
-/* items: [{wiki, wd}] → Map(item → {t, u, i?: {s, a, l, f}}) */
+/* items: [{wiki, wd, f: {cm}}] → Map(item → {t?, u?, i?: {s, a, l, f}}): статья и/или фото.
+   Фото — из Викиданных (P18), из тега wikimedia_commons места или главная картинка статьи. */
 export async function placeInfo(items, cachePath) {
   let cache = {};
   try { cache = JSON.parse(readFileSync(cachePath, 'utf8')); } catch { /* нет кэша */ }
@@ -75,7 +76,7 @@ export async function placeInfo(items, cachePath) {
   /* 3. Commons: только файлы, которые там есть, с автором и лицензией */
   const fileOf = (x) => {
     const q = cache['q:' + x.wd], t = cache['t:' + titleOf(x)];
-    return (q && q.img) || (t && t.img) || null;
+    return (q && q.img) || (x.f && x.f.cm) || (t && t.img) || null;
   };
   const files = [...new Set(items.map(fileOf).filter((f) => f && !(('f:' + f) in cache)))];
   for (const part of chunks(files, 50)) {
@@ -103,11 +104,11 @@ export async function placeInfo(items, cachePath) {
   const out = new Map();
   for (const x of items) {
     const t = cache['t:' + titleOf(x)];
-    if (!t) continue;
     const f = fileOf(x), img = f ? cache['f:' + f] : null;
+    if (!t && !img) continue;
     /* ссылки короче: адрес статьи без %-кодов, превью без меток в запросе */
     const short = (u) => { try { return decodeURI(u); } catch { return u; } };
-    out.set(x, { t: t.t, u: short(t.u), ...(img ? { i: { ...img, s: img.s.replace(/\?.*$/, ''), f: short(img.f) } } : {}) });
+    out.set(x, { ...(t ? { t: t.t, u: short(t.u) } : {}), ...(img ? { i: { ...img, s: img.s.replace(/\?.*$/, ''), f: short(img.f) } } : {}) });
   }
   return out;
 }

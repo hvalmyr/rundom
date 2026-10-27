@@ -68,9 +68,9 @@ export function initCoverageMap(app) {
     return [
       ...dist.parks.map((p, i) => {
         const c = p.rings[0].reduce((a, q) => [a[0] + q[0] / p.rings[0].length, a[1] + q[1] / p.rings[0].length], [0, 0]);
-        return { id: dist.id, i, park: true, n: p.n, c: 'park', lat: c[0], lon: c[1], rings: p.rings, w: p.w };
+        return { id: dist.id, i, park: true, n: p.n, c: 'park', lat: c[0], lon: c[1], rings: p.rings, w: p.w, f: p.f, ha: p.ha };
       }),
-      ...dist.objects.map((o, i) => ({ id: dist.id, i, park: false, n: o.n, c: o.c, lat: o.lat, lon: o.lon, s: o.s, w: o.w }))
+      ...dist.objects.map((o, i) => ({ id: dist.id, i, park: false, n: o.n, c: o.c, lat: o.lat, lon: o.lon, s: o.s, w: o.w, f: o.f }))
     ].map((p) => ({ ...p, st: stateOf(p.id, p.i, p.park, p.c, p.n) }));
   }
 
@@ -197,13 +197,34 @@ export function initCoverageMap(app) {
       p.w && p.w.i ? photo(p.w.i) : null,
       el('strong', null, Core.placeName({ name: p.n, cat: p.c })),
       el('div', { class: 'sub' }, [CAT[p.c], STATE[st], p.s].filter(Boolean).join(' · ')),
-      p.w ? el('p', { class: 'desc' }, p.w.t, ' ', el('a', { href: p.w.u, target: '_blank', rel: 'noopener' }, 'Википедия')) : null,
+      about(p),
       el('div', { class: 'btns' },
         el('button', { class: 'btn small', type: 'button', onclick: () => { toggleVisited(p); map.closePopup(); } }, st === 2 ? 'Снять отметку' : 'Исследовал'),
         el('button', {
           class: 'btn small', type: 'button',
           onclick: () => { app.toggleForced({ id: fid, name: p.n, lat: p.lat, lon: p.lon }); map.closePopup(); }
         }, app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут')));
+  }
+  /* справка о месте: вступление статьи Википедии, описание и факты из OSM */
+  const FACTS = [['y', 'Год'], ['ar', 'Архитектор'], ['au', 'Автор'], ['sb', 'Посвящён'], ['de', 'Конфессия'],
+    ['he', 'Объект наследия'], ['oh', 'Часы работы'], ['in', 'Надпись']];
+  /* даты OSM: 2005-05-09 → 9 мая 2005, 1895-06 → июнь 1895 */
+  const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  const MONTH1 = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+  const fmtDate = (v) => v.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (m, y, mo, d) => MONTHS[mo - 1] ? Number(d) + ' ' + MONTHS[mo - 1] + ' ' + y : m)
+    .replace(/\b(\d{4})-(\d{2})\b/g, (m, y, mo) => MONTH1[mo - 1] ? MONTH1[mo - 1] + ' ' + y : m).replace(/\bC(\d{1,2})\b/, '$1 век');
+  const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+  function about(p) {
+    const f = p.f || {}, w = p.w || {};
+    const rows = FACTS.filter(([k]) => f[k]).map(([k, t]) => [t, k === 'y' ? fmtDate(f[k]) : f[k]]);
+    if (p.park && p.ha) rows.unshift(['Площадь', String(p.ha).replace('.', ',') + ' га']);
+    const nodes = [
+      w.t ? el('p', { class: 'desc' }, w.t, ' ', el('a', { href: w.u, target: '_blank', rel: 'noopener' }, 'Википедия')) : null,
+      !w.t && f.ds ? el('p', { class: 'desc' }, f.ds) : null,
+      rows.length ? el('dl', { class: 'facts' }, rows.flatMap(([t, v]) => [el('dt', null, t), el('dd', null, v)])) : null,
+      f.ws ? el('a', { class: 'site', href: f.ws, target: '_blank', rel: 'noopener' }, host(f.ws)) : null
+    ].filter(Boolean);
+    return nodes.length ? el('div', { class: 'about-place' }, nodes) : null;
   }
   /* фото с Commons: автор и лицензия под ним, ссылка на страницу файла */
   function photo(i) {
@@ -319,7 +340,7 @@ export function initCoverageMap(app) {
           el('a', { class: 'src', href: dist.about.u, target: '_blank', rel: 'noopener' }, 'Текст: Википедия, CC BY-SA'));
       } else body.append(el('p', { class: 'hint' }, 'Справки о районе нет.'));
       /* достопримечательности района с описанием: с фото — первыми */
-      const known = places.filter((p) => p.w).sort((a, b) => (!!b.w.i - !!a.w.i) || CAT_ORDER.indexOf(a.c) - CAT_ORDER.indexOf(b.c));
+      const known = places.filter((p) => p.w && p.w.t).sort((a, b) => (!!b.w.i - !!a.w.i) || CAT_ORDER.indexOf(a.c) - CAT_ORDER.indexOf(b.c));
       if (known.length) {
         body.append(el('h3', { class: 'dp-sub' }, 'Что посмотреть'),
           el('div', { class: 'sights' }, known.slice(0, 12).map((p) => el('article', { class: 'sight' },
@@ -332,7 +353,9 @@ export function initCoverageMap(app) {
       }
     }
   }
-  const byState = (a, b) => (b.st - a.st) || CAT_ORDER.indexOf(a.c) - CAT_ORDER.indexOf(b.c) || a.n.localeCompare(b.n, 'ru');
+  /* сначала места со справкой: с фото, со статьёй, с фактами */
+  const richness = (p) => (p.w && p.w.i ? 4 : 0) + (p.w && p.w.t ? 2 : 0) + (p.f && Object.keys(p.f).length ? 1 : 0);
+  const byState = (a, b) => (b.st - a.st) || richness(b) - richness(a) || CAT_ORDER.indexOf(a.c) - CAT_ORDER.indexOf(b.c) || a.n.localeCompare(b.n, 'ru');
   /* типы мест — одной прокручиваемой строкой: значок, название, сколько мест; выбранный виден сразу */
   function catChips(list, cur, on) {
     const n = (c) => list.filter((p) => p.c === c).length;
@@ -347,12 +370,37 @@ export function initCoverageMap(app) {
     });
     return row;
   }
+  /* строка места раскрывается на месте: фото, справка, кнопки; открытой остаётся одна */
+  let openRow = null;
+  const rowKey = (p) => p.id + ':' + (p.park ? 'p' : 'o') + p.i;
   function placeRow(p) {
-    return el('div', { class: 'prow' },
-      el('span', { class: 'pic st' + p.st, 'aria-hidden': 'true', html: placeSvg(p.c) }),
-      el('button', { class: 'pname', type: 'button', onclick: () => showPlace(p) },
-        Core.placeName({ name: p.n, cat: p.c }), el('small', null, CAT[p.c] + ' · ' + STATE[p.st])),
-      el('button', { class: 'btn small ghost', type: 'button', onclick: () => toggleVisited(p) }, p.st === 2 ? 'Снять' : 'Исследовал'));
+    const k = rowKey(p), fid = 'cov:' + C.placeKey(p.id, p.c, p.n);
+    const rich = !!(p.w || (p.f && Object.keys(p.f).length) || p.ha);
+    const item = el('div', { class: 'pitem' });
+    const detail = () => el('div', { class: 'pdetail', id: 'pd-' + k.replace(':', '-') },
+      p.w && p.w.i ? photo(p.w.i) : null,
+      about(p) || el('p', { class: 'hint' }, 'Справки об этом месте пока нет.'),
+      el('div', { class: 'btns' },
+        el('button', { class: 'btn small', type: 'button', onclick: () => showPlace(p) }, 'На карте'),
+        el('button', {
+          class: 'btn small', type: 'button',
+          onclick: (e) => { app.toggleForced({ id: fid, name: p.n, lat: p.lat, lon: p.lon }); e.target.textContent = app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут'; }
+        }, app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут')));
+    const head = el('button', {
+      class: 'pname', type: 'button', 'aria-expanded': String(openRow === k), 'aria-controls': 'pd-' + k.replace(':', '-'),
+      onclick: () => {
+        const open = head.getAttribute('aria-expanded') !== 'true';
+        document.querySelectorAll('.pitem.open').forEach((x) => { x.classList.remove('open'); x.querySelector('.pname').setAttribute('aria-expanded', 'false'); x.querySelector('.pdetail')?.remove(); });
+        openRow = open ? k : null;
+        if (open) { item.classList.add('open'); head.setAttribute('aria-expanded', 'true'); item.append(detail()); }
+      }
+    }, el('span', { class: 'pt' }, Core.placeName({ name: p.n, cat: p.c }), el('span', { class: 'chev', 'aria-hidden': 'true' })),
+      el('small', null, CAT[p.c] + ' · ' + STATE[p.st], rich ? el('span', { class: 'has', title: 'Есть справка', 'aria-label': ', есть справка' }, p.w && p.w.i ? ' · фото' : ' · справка') : null));
+    item.append(el('div', { class: 'prow' },
+      el('span', { class: 'pic st' + p.st, 'aria-hidden': 'true', html: placeSvg(p.c) }), head,
+      el('button', { class: 'btn small ghost', type: 'button', onclick: () => toggleVisited(p) }, p.st === 2 ? 'Снять' : 'Исследовал')));
+    if (openRow === k) { item.classList.add('open'); item.append(detail()); }
+    return item;
   }
 
   /* ---------- вкладка: сводка, районы, места ---------- */

@@ -82,7 +82,7 @@ function decodeDistrict(f) {
   }
   const objects = (f.ob || []).map((o) => {
     const lat = (f.o[0] + o.p[0]) / Q, lon = (f.o[1] + o.p[1]) / Q;
-    return { n: o.n, c: o.c, s: o.s || '', w: o.w || null, lat, lon, x: px(lon), y: py(lat), segs: [] };
+    return { n: o.n, c: o.c, s: o.s || '', w: o.w || null, f: o.f || null, lat, lon, x: px(lon), y: py(lat), segs: [] };
   });
   const byName = new Map(streets.map((st, i) => [st.n, i]));
   for (const o of objects) {
@@ -101,7 +101,7 @@ function decodeDistrict(f) {
     for (const r of flat) for (let i = 0; i < r.length; i += 2) {
       x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); y0 = Math.min(y0, r[i + 1]); y1 = Math.max(y1, r[i + 1]);
     }
-    return { n: p.n, ha: p.ha, w: p.w || null, rings, flat, box: [x0, y0, x1, y1] };
+    return { n: p.n, ha: p.ha, w: p.w || null, f: p.f || null, rings, flat, box: [x0, y0, x1, y1] };
   });
   return {
     id: f.id, n: f.n, v: f.v, about: f.about || null, streets, objects, parks,

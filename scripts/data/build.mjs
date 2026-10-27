@@ -70,6 +70,41 @@ const objects = [];       /* {name, cat, p, wiki, tags} */
 const parks = [];         /* {name, rings, wiki} */
 const relWayGeom = new Map();
 
+/* Справка о месте из тегов OSM — есть у мест и без статьи в Википедии. Ключи короткие: файл района мал. */
+const clip = (v, n) => { v = String(v).replace(/\s+/g, ' ').trim(); return v.length > n ? v.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : v; };
+const RELIGION = { christian: 'христианство', muslim: 'ислам', jewish: 'иудаизм', buddhist: 'буддизм' };
+const DENOM = { russian_orthodox: 'православный', orthodox: 'православный', old_believers: 'старообрядческий', catholic: 'католический',
+  roman_catholic: 'католический', lutheran: 'лютеранский', protestant: 'протестантский', armenian_apostolic: 'армянский апостольский',
+  baptist: 'баптистский', evangelical: 'евангельский', sunni: 'суннитский', shia: 'шиитский' };
+const HERITAGE = { 2: 'федерального значения', 3: 'регионального значения', 4: 'местного значения' };
+function factsOf(t) {
+  const f = {};
+  const year = t.start_date || t['building:start_date'] || t['construction_date'];
+  if (year && /\d{3,4}/.test(year)) f.y = clip(year.replace(/^~/, 'около ').replace(/\.\.|–|--/, '–'), 24);
+  const arch = t.architect || t['architect:ru'];
+  if (arch) f.ar = clip(arch.replace(/;\s*/g, ', '), 80);
+  const art = t.artist_name || t['artist:name'] || t.sculptor;
+  if (art) f.au = clip(art.replace(/;\s*/g, ', '), 80);
+  const subj = t['subject:ru'] || t.subject || t['memorial:subject'];
+  if (subj && !/^Q\d+$/.test(subj)) f.sb = clip(subj, 80);
+  if (t.inscription) f.in = clip(t['inscription:ru'] || t.inscription, 160);
+  if (t.amenity === 'place_of_worship') {
+    const d = DENOM[t.denomination] || RELIGION[t.religion];
+    if (d) f.de = d;
+  }
+  if (t.heritage) f.he = HERITAGE[t.heritage] || 'есть';
+  if (t.opening_hours) f.oh = clip(t.opening_hours, 60);
+  const site = t.website || t['contact:website'] || t.url;
+  if (site && /^https?:\/\//.test(site)) f.ws = site.length > 120 ? undefined : site;
+  if (t.description || t['description:ru']) f.ds = clip(t['description:ru'] || t.description, 200);
+  const cm = /^File:(.+)$/.exec(t.wikimedia_commons || '') || /commons\.wikimedia\.org\/wiki\/File:([^?#]+)/.exec(t.image || '');
+  if (cm) f.cm = decodeURIComponent(cm[1]).replace(/_/g, ' ');
+  for (const k of Object.keys(f)) if (f[k] === undefined) delete f[k];
+  return f;
+}
+/* при слиянии двойников — дополняем справку тем, чего в ней ещё нет */
+const mergeFacts = (a, b) => { for (const k of Object.keys(b)) if (!(k in a)) a[k] = b[k]; };
+
 function objectCategory(t) {
   if (!t.name || closedEntry(t)) return null;
   if (t.memorial === 'plaque' || t.memorial === 'stolperstein' || t.historic === 'boundary_stone') return null;
@@ -93,7 +128,7 @@ readPbf(FILE, {
     nId[nN] = id; nLat[nN] = lat; nLon[nN] = lon; nN++;
     if (t) {
       const cat = objectCategory(t);
-      if (cat) objects.push({ name: t.name, cat, p: [lat, lon], wiki: t.wikipedia || '', wd: t.wikidata || '' });
+      if (cat) objects.push({ name: t.name, cat, p: [lat, lon], wiki: t.wikipedia || '', wd: t.wikidata || '', f: factsOf(t) });
     }
   },
   way(id, refs, t) {
@@ -105,13 +140,13 @@ readPbf(FILE, {
       return;
     }
     if (isPark(t) && refs.length > 3 && refs[0] === refs[refs.length - 1]) {
-      parks.push({ name: t.name, rings: [coords(refs)], wiki: t.wikipedia || '', wd: t.wikidata || '' });
+      parks.push({ name: t.name, rings: [coords(refs)], wiki: t.wikipedia || '', wd: t.wikidata || '', f: factsOf(t) });
       return;
     }
     const cat = objectCategory(t);
     if (cat && refs.length) {
       const pts = coords(refs);
-      if (pts.length) objects.push({ name: t.name, cat, p: centroid(pts), wiki: t.wikipedia || '', wd: t.wikidata || '' });
+      if (pts.length) objects.push({ name: t.name, cat, p: centroid(pts), wiki: t.wikipedia || '', wd: t.wikidata || '', f: factsOf(t) });
     }
     if (!hw || t.area === 'yes') return;
     /* ось большой улицы без права прохода (foot=no, trunk): опора для её тротуаров */
@@ -129,7 +164,7 @@ log('проход 2: узлов', nN, 'путей', ways.length, 'объекто
 for (const r of parkRels) {
   const segs = r.ways.map((w) => relWayGeom.get(w)).filter((g) => g && g.length > 1);
   const rings = stitch(segs);
-  if (rings.length) parks.push({ name: r.t.name, rings, wiki: r.t.wikipedia || '', wd: r.t.wikidata || '' });
+  if (rings.length) parks.push({ name: r.t.name, rings, wiki: r.t.wikipedia || '', wd: r.t.wikidata || '', f: factsOf(r.t) });
 }
 nId = nLat = nLon = null;
 
@@ -368,7 +403,7 @@ for (const o of objects) {
   if (inKremlin(o.p)) { kremlinDropped++; continue; }
   const k = gkey(px(o.p[1]), py(o.p[0]));
   const near = (grid.get(k) || []).find((q) => q.name === o.name && hav(q.p[0], q.p[1], o.p[0], o.p[1]) < 150);
-  if (near) { if (!near.wiki) near.wiki = o.wiki; if (!near.wd) near.wd = o.wd; continue; }
+  if (near) { if (!near.wiki) near.wiki = o.wiki; if (!near.wd) near.wd = o.wd; mergeFacts(near.f, o.f); continue; }
   dedup.push(o); (grid.get(k) || grid.set(k, []).get(k)).push(o);
 }
 const sList = axis.filter((w) => !w.drop), sGrid = segGrid(sList);
@@ -384,7 +419,7 @@ for (const p of parks) {
   const c = centroid(outer[0]);
   if (!inMkad(c[0], c[1]) || inKremlin(c)) continue;
   if (parkList.some((q) => q.name === p.name && hav(q.c[0], q.c[1], c[0], c[1]) < 300)) continue;
-  parkList.push({ name: p.name, c, rings: outer.filter((r) => area(r) >= 2000).map((r) => simplifyDP(r, 8)), wiki: p.wiki, wd: p.wd, area: area(outer[0]) });
+  parkList.push({ name: p.name, c, rings: outer.filter((r) => area(r) >= 2000).map((r) => simplifyDP(r, 8)), wiki: p.wiki, wd: p.wd, f: p.f, area: area(outer[0]) });
 }
 log('объектов', dedup.length, 'парков', parkList.length, 'убрано в Кремле', kremlinDropped);
 
@@ -421,9 +456,12 @@ function trimText(s) {
 }
 
 /* ---------- описания и фото мест ---------- */
-const withWiki = [...dedup, ...parkList].filter((q) => q.wiki || q.wd);
+const withWiki = [...dedup, ...parkList].filter((q) => q.wiki || q.wd || q.f.cm);
 const info = await placeInfo(withWiki, process.env.PLACES_CACHE || '.cache/places.json');
-log('мест со статьёй', withWiki.length, 'с описанием', info.size, 'с фото', [...info.values()].filter((x) => x.i).length);
+log('мест со ссылкой на вики', withWiki.length, 'с описанием', [...info.values()].filter((x) => x.t).length, 'с фото', [...info.values()].filter((x) => x.i).length,
+  'со справкой из OSM', [...dedup, ...parkList].filter((q) => Object.keys(q.f).some((k) => k !== 'cm')).length);
+/* фото с Commons уже в w.i: имя файла в справке больше не нужно */
+const factsOut = (q) => { const { cm, ...f } = q.f; return Object.keys(f).length ? f : undefined; };
 
 /* ---------- запись ---------- */
 const enc = (p, o) => [Math.round(p[0] * Q) - o[0], Math.round(p[1] * Q) - o[1]];
@@ -451,9 +489,9 @@ for (let i = 0; i < districts.length; i++) {
   const tags = districtTags.get(d.id) || {};
   const about = (await wiki(tags.wikipedia || '')) || (await wiki('ru:' + d.n + ' (район Москвы)')) || (await wiki('ru:' + d.n + ' (район)'));
   const objs = dedup.filter((q) => districtAt(q.p[0], q.p[1]) === i)
-    .map((q) => ({ n: q.name, c: q.cat, p: enc(q.p, o), s: streetNear(q.p) || undefined, w: info.get(q) }));
+    .map((q) => ({ n: q.name, c: q.cat, p: enc(q.p, o), s: streetNear(q.p) || undefined, w: info.get(q), f: factsOut(q) }));
   const pk = parkList.filter((q) => districtAt(q.c[0], q.c[1]) === i)
-    .map((q) => ({ n: q.name, ha: Math.round(q.area / 1000) / 10, r: q.rings.map((r) => encLine(r, o)), w: info.get(q) }));
+    .map((q) => ({ n: q.name, ha: Math.round(q.area / 1000) / 10, r: q.rings.map((r) => encLine(r, o)), w: info.get(q), f: factsOut(q) }));
   const file = {
     id: d.id, n: d.n, v: version, o,
     s: streets.map((s) => ({ n: s.n || undefined, t: s.t === 20 ? undefined : s.t, c: joinChains(s.chains).map((c) => encLine(c, o)) })),
