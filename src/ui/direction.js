@@ -3,7 +3,7 @@ import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { divIcon } from '../map/map.js';
-import { $, el, syncSeg, toast } from './dom.js';
+import { $, el, syncSeg, toast, ICON } from './dom.js';
 
 const SIDES = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];
 const NS = 'http://www.w3.org/2000/svg';
@@ -118,22 +118,16 @@ export function initDirection(app) {
     P.districts = P.districts.includes(id) ? P.districts.filter((x) => x !== id) : [...P.districts, id];
     changed();
   }
+  /* выбранные районы — пилюли в поле поиска: у каждой свой крестик, справа — выбор на карте */
   function renderChips() {
     const box = $('#distChips');
-    box.innerHTML = '';
-    for (const id of P.districts) {
-      const d = byId(id);
-      if (!d) continue;
-      box.appendChild(el('button', { class: 'chip dist', type: 'button', 'aria-label': 'Убрать ' + d.n, onclick: () => toggle(id) }, d.n + ' ×'));
-    }
-    box.appendChild(el('button', {
-      class: 'chip add', type: 'button', onclick: () => {
-        if (picking()) { app.setMode(null); return; }
-        app.setMode('districts', 'Нажимайте на районы, чтобы выбрать. Ещё раз — снять выбор');
-        renderDistricts(); renderChips();
-        if (!P.districts.length) map.setZoom(Math.min(map.getZoom(), 12));
-      }
-    }, picking() ? 'Готово' : '+ на карте'));
+    box.replaceChildren(...P.districts.map(byId).filter(Boolean).map((d) =>
+      el('span', { class: 'pill' }, d.n,
+        el('button', { type: 'button', 'aria-label': 'Убрать ' + d.n, html: ICON.remove, onclick: (e) => { e.stopPropagation(); toggle(d.id); } }))));
+    const mapBtn = $('#distMap');
+    mapBtn.setAttribute('aria-pressed', String(picking()));
+    mapBtn.querySelector('span').textContent = picking() ? 'готово' : 'на карте';
+    $('#distSearch').placeholder = P.districts.length ? 'Ещё район' : 'Найти район';
     syncSeg($('#strictSeg'), 'strict', P.distStrict ? '1' : '0');
     syncSeg($('#multiSeg'), 'multi', P.distMulti);
     $('#multiSeg').hidden = P.districts.length < 2;
@@ -141,29 +135,64 @@ export function initDirection(app) {
       ? 'Кольцо целиком в выбранных районах, кроме подводки и пути до района.'
       : 'Самая дальняя точка — в районе, выходить за его границы можно.';
   }
+  $('#distMap').addEventListener('click', () => {
+    if (picking()) { app.setMode(null); return; }
+    app.setMode('districts', 'Нажимайте на районы, чтобы выбрать. Ещё раз — снять выбор');
+    renderDistricts(); renderChips();
+    if (!P.districts.length) map.setZoom(Math.min(map.getZoom(), 12));
+  });
   app.registerMode('districts', { keep: '#districtBox', ok() { app.setMode(null); }, leave() { setTimeout(() => { renderDistricts(); renderChips(); }); } });
 
-  /* поиск района по названию */
-  const search = $('#distSearch'), sug = $('#distSug');
-  search.addEventListener('input', async () => {
-    const q = norm(search.value.trim());
-    sug.innerHTML = '';
-    if (q.length < 2) { sug.hidden = true; return; }
+  /* поиск и выбор района: пустой запрос показывает все районы, щелчок по строке ставит и снимает выбор */
+  const search = $('#distSearch'), sug = $('#distSug'), pick = $('#distPick');
+  let options = [], act = -1;
+  async function openList() {
     const idx = await app.loadDistricts();
-    const found = idx.list.filter((d) => norm(d.n).includes(q)).slice(0, 8);
-    for (const d of found) {
-      sug.appendChild(el('button', {
-        type: 'button', onclick: () => {
-          if (!P.districts.includes(d.id)) toggle(d.id);
-          map.fitBounds(L.polygon(d.p).getBounds(), { padding: [40, 40] });
-          search.value = ''; sug.hidden = true;
-        }
-      }, d.n, P.districts.includes(d.id) ? el('small', null, 'уже выбран') : null));
-    }
-    if (!found.length) sug.appendChild(el('button', { type: 'button', disabled: true }, 'Такого района нет'));
+    const q = norm(search.value.trim());
+    options = idx.list.filter((d) => !q || norm(d.n).includes(q)).sort((a, b) => a.n.localeCompare(b.n, 'ru'));
+    act = q && options.length ? 0 : -1;
+    paintList();
     sug.hidden = false;
+    search.setAttribute('aria-expanded', 'true');
+  }
+  function paintList() {
+    const sel = new Set(P.districts);
+    sug.replaceChildren(...options.map((d, i) =>
+      el('button', {
+        type: 'button', role: 'option', id: 'dopt' + i, class: i === act ? 'act' : '', 'aria-selected': String(sel.has(d.id)), tabindex: '-1',
+        onmousedown: (e) => e.preventDefault(), onclick: () => choose(d)
+      }, el('span', { class: 'tick', 'aria-hidden': 'true' }), d.n)));
+    if (!options.length) sug.appendChild(el('div', { class: 'none' }, 'Такого района нет'));
+    if (act >= 0) { search.setAttribute('aria-activedescendant', 'dopt' + act); sug.children[act].scrollIntoView({ block: 'nearest' }); }
+    else search.removeAttribute('aria-activedescendant');
+  }
+  function closeList() { sug.hidden = true; search.setAttribute('aria-expanded', 'false'); act = -1; }
+  function choose(d) {
+    const adding = !P.districts.includes(d.id);
+    toggle(d.id);
+    if (adding) map.fitBounds(L.polygon(d.p).getBounds(), { padding: [40, 40] });
+    if (search.value) { search.value = ''; openList(); } else paintList();
+  }
+  search.addEventListener('focus', openList);
+  search.addEventListener('input', openList);
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (sug.hidden) { openList(); return; }
+      if (options.length) { act = (act + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length; paintList(); }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (options[act]) choose(options[act]);
+    } else if (e.key === 'Escape') {
+      if (!sug.hidden) { e.stopPropagation(); closeList(); }
+    } else if (e.key === 'Backspace' && !search.value && P.districts.length) {
+      toggle(P.districts[P.districts.length - 1]);
+      if (!sug.hidden) paintList();
+    }
   });
-  document.addEventListener('click', (e) => { if (!sug.contains(e.target) && e.target !== search) sug.hidden = true; });
+  search.addEventListener('blur', () => setTimeout(() => { if (!pick.contains(document.activeElement)) closeList(); }, 120));
+  /* щелчок по пустому месту поля — в поиск */
+  pick.querySelector('.ps-box').addEventListener('click', (e) => { if (!e.target.closest('button, input')) search.focus(); });
 
   /* ---------- переключатели ---------- */
   async function changed() {

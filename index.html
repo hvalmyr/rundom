@@ -99,10 +99,18 @@
       </div>
 
       <div class="dirbox" id="districtBox" hidden>
-        <div class="chips" id="distChips"></div>
-        <div class="field">
-          <input id="distSearch" type="search" placeholder="Найти район" autocomplete="off" aria-label="Найти район">
-          <div class="sug" id="distSug" hidden></div>
+        <div class="pillselect" id="distPick">
+          <div class="ps-box">
+            <div class="ps-main">
+              <div class="ps-pills" id="distChips"></div>
+              <input id="distSearch" type="text" role="combobox" aria-expanded="false" aria-controls="distSug" aria-autocomplete="list"
+                placeholder="Найти район" autocomplete="off" aria-label="Районы маршрута: найти и выбрать">
+            </div>
+            <button class="ps-map" id="distMap" type="button" aria-pressed="false" title="Выбирать районы на карте">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg><span>на карте</span>
+            </button>
+          </div>
+          <div class="sug" id="distSug" role="listbox" aria-multiselectable="true" aria-label="Районы" hidden></div>
         </div>
         <div class="seg" id="strictSeg" role="group" aria-label="Насколько строго держаться районов">
           <button type="button" data-strict="1">Строго</button><button type="button" data-strict="0">Примерно</button>

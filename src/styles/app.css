@@ -470,7 +470,56 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .rose text { font: 500 10px var(--font-sans); fill: var(--ink-muted); pointer-events: none; }
 .rose text.on { fill: var(--paper); }
 .rose .needle { stroke: var(--carmine); stroke-width: 2; stroke-linecap: round; }
-.chip.dist { background: var(--carmine-tint); border-color: var(--carmine); color: var(--carmine-strong); }
+/* выбор районов: пилюли и поиск в одном поле, справа — выбор на карте */
+.pillselect { position: relative; }
+.ps-box {
+  display: flex; align-items: flex-start; gap: 6px; min-height: var(--control-h); box-sizing: border-box;
+  padding: 5px 5px 5px 6px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 20px; cursor: text;
+  transition: border-color .15s, box-shadow .15s;
+}
+.ps-box:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent); }
+.ps-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ps-pills { display: contents; }
+.pill {
+  display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 2px 0 11px; border-radius: var(--radius-pill);
+  background: var(--carmine); color: #fff; font-size: 13px; font-weight: 500; line-height: 18px;
+}
+.pill button { all: unset; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; }
+.pill button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.pill button:hover { background: rgb(255 255 255 / .22); }
+.pill button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+.ps-box input[type="text"] { flex: 1 1 90px; min-width: 90px; height: 28px; border: 0; padding: 0 6px; background: none; box-shadow: none; }
+.ps-box input[type="text"]:focus { outline: none; }
+.ps-map {
+  all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px 0 9px; flex: none;
+  border-radius: var(--radius-pill); background: var(--surface-sunk); color: var(--ink); font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.ps-map svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.ps-map:hover { background: var(--line); }
+.ps-map:focus-visible { outline: 2px solid var(--focus); }
+.ps-map[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.pillselect .sug { top: calc(100% + 4px); padding: 4px; border-radius: 14px; max-height: 280px; }
+.pillselect .sug button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; font-size: 14px; }
+.pillselect .sug button.act { background: var(--surface-sunk); }
+.pillselect .sug .tick { flex: none; width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--line-strong); }
+.pillselect .sug [aria-selected="true"] { color: var(--carmine-strong); font-weight: 500; }
+.pillselect .sug [aria-selected="true"] .tick {
+  border-color: var(--carmine); background: var(--carmine) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.6 2.5L12 5.5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+}
+.pillselect .sug .none { padding: 9px 10px; color: var(--ink-muted); font-size: 14px; }
+
+/* типы мест: одна строка с прокруткой, края гаснут */
+.pills {
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; padding: 2px 16px 2px 0; margin-right: -4px;
+  -webkit-mask: linear-gradient(90deg, #000 calc(100% - 24px), transparent); mask: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+}
+.pills::-webkit-scrollbar { display: none; }
+.chip.cat { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 10px; transition: background .15s, border-color .15s, color .15s; }
+.chip.cat .ic svg { display: block; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.chip.cat .n { font-size: 12px; color: var(--ink-muted); font-weight: 400; }
+.chip.cat[aria-pressed="true"] { background: var(--carmine); border-color: var(--carmine); color: #fff; }
+.chip.cat[aria-pressed="true"] .n { color: rgb(255 255 255 / .8); }
+.chip.cat[aria-pressed="true"]:hover { background: var(--carmine-strong); border-color: var(--carmine-strong); }
 
 .leaflet-pane path.district { stroke: var(--ink-muted); stroke-opacity: .7; stroke-width: 1.1; fill: var(--ink); fill-opacity: 0; transition: fill-opacity .18s, stroke .18s, stroke-width .18s; }
 .leaflet-pane path.district.leaflet-interactive:hover { fill-opacity: .07; stroke: var(--ink); stroke-opacity: 1; stroke-width: 1.8; }

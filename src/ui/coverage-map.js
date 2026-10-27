@@ -333,11 +333,19 @@ export function initCoverageMap(app) {
     }
   }
   const byState = (a, b) => (b.st - a.st) || CAT_ORDER.indexOf(a.c) - CAT_ORDER.indexOf(b.c) || a.n.localeCompare(b.n, 'ru');
+  /* типы мест — одной прокручиваемой строкой: значок, название, сколько мест; выбранный виден сразу */
   function catChips(list, cur, on) {
-    const cats = CAT_ORDER.filter((c) => list.some((p) => p.c === c));
-    return el('div', { class: 'chips' },
-      [['all', 'Все'], ...cats.map((c) => [c, CAT[c][0].toUpperCase() + CAT[c].slice(1)])].map(([k, t]) =>
-        el('button', { class: 'chip', type: 'button', 'aria-pressed': String(cur === k), onclick: () => on(k) }, t)));
+    const n = (c) => list.filter((p) => p.c === c).length;
+    const cats = CAT_ORDER.filter((c) => n(c));
+    const row = el('div', { class: 'pills', role: 'group', 'aria-label': 'Тип места' },
+      [['all', 'Все', list.length], ...cats.map((c) => [c, CAT[c][0].toUpperCase() + CAT[c].slice(1), n(c)])].map(([k, t, cnt]) =>
+        el('button', { class: 'chip cat', type: 'button', 'aria-pressed': String(cur === k), onclick: () => on(k) },
+          k === 'all' ? null : el('span', { class: 'ic', 'aria-hidden': 'true', html: placeSvg(k) }), t, el('span', { class: 'n' }, String(cnt)))));
+    requestAnimationFrame(() => {
+      const b = row.querySelector('[aria-pressed="true"]');
+      if (b) row.scrollLeft = b.offsetLeft - (row.clientWidth - b.offsetWidth) / 2;
+    });
+    return row;
   }
   function placeRow(p) {
     return el('div', { class: 'prow' },
