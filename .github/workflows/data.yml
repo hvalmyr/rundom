@@ -51,10 +51,15 @@ jobs:
         run: |
           tag="data-$(date -u +%Y-%m)"
           tar czf data.tar.gz -C public/data .
-          gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
           printf '\n[Сборка](%s)\n' "$RUN_URL" >> report.md
-          gh release create "$tag" data.tar.gz public/data/stats.json --latest \
-            --title "Данные OSM от $(jq -r .date public/data/stats.json)" --notes-file report.md
+          title="Данные OSM от $(jq -r .date public/data/stats.json)"
+          # повторная сборка в том же месяце обновляет релиз на месте: сайт не остаётся без данных между удалением и созданием
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" data.tar.gz public/data/stats.json --clobber
+            gh release edit "$tag" --latest --title "$title" --notes-file report.md
+          else
+            gh release create "$tag" data.tar.gz public/data/stats.json --latest --title "$title" --notes-file report.md
+          fi
           gh workflow run deploy.yml --ref main
       - name: Report failure
         if: failure()
