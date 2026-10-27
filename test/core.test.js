@@ -219,3 +219,22 @@ test('monument names in the dative get «Памятник»', () => {
   assert.equal(Core.placeName({ name: 'Памятный камень на месте баррикады', cat: 'monument' }), 'Памятный камень на месте баррикады');
   assert.equal(Core.placeName({ name: 'Церковь Николая в Хамовниках', cat: 'worship' }), 'Церковь Николая в Хамовниках');
 });
+
+test('coverage: a track along the avenue does not count the first metres of cross streets', () => {
+  const o = [5575000, 3760000], Q = 1e5;
+  const line = (a, b, c, d) => [Math.round(a * Q) - o[0], Math.round(b * Q) - o[1], Math.round((c - a) * Q), Math.round((d - b) * Q)];
+  const dist = Core.decodeDistrict({
+    id: 2, n: 'Перекрёсток', v: 1, o,
+    s: [
+      { n: 'Проспект', t: 40, c: [line(55.751, 37.601, 55.751, 37.6042)] },
+      { n: 'Поперечная', c: [line(55.751, 37.6025, 55.7535, 37.6025)] } /* на север от проспекта, ≈280 м */
+    ]
+  });
+  const r = Core.coverTrack(dist, [[[55.75127, 37.6008], [55.75127, 37.6044]]]);
+  const st = Core.districtStats(dist, r.segs);
+  assert.ok(st.byStreet[0] > 190, 'avenue ' + st.byStreet[0]);
+  assert.equal(st.byStreet[1], 0, 'cross street stub');
+  /* а пробежка по самой поперечной засчитывается */
+  const up = Core.districtStats(dist, Core.coverTrack(dist, [[[55.751, 37.60253], [55.7535, 37.60253]]]).segs);
+  assert.ok(up.byStreet[1] > 250, 'cross street ' + up.byStreet[1]);
+});

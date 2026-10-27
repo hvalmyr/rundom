@@ -37,9 +37,10 @@ export function initCoverage(app) {
       for (const i of r.objs) o.push(id + ':' + i);
       for (const i of r.parks) p.push(id + ':' + i);
     }
-    return { v: idx.v, d, o, p };
+    return { v: ver(), d, o, p };
   }
-  const fresh = (t) => t.cov && C.index && t.cov.v === C.index.v;
+  const ver = () => C.index.v + '.' + Core.COVER_VERSION;
+  const fresh = (t) => t.cov && C.index && t.cov.v === ver();
 
   /* Покрытие трека: из записи, если версия данных та же, иначе пересчёт и сохранение. */
   C.ensure = (t) => {
@@ -87,6 +88,28 @@ export function initCoverage(app) {
     met.sort((a, b) => (b.isNew - a.isNew) || ((b.c === 'park') - (a.c === 'park')));
     return { gainShare: gain / (C.index.km * 1000), gainKm: gain / 1000, met };
   };
+
+  /* Участки района, пройденные хоть одним треком. */
+  C.covered = (id) => {
+    const set = new Set();
+    for (const t of tracks.items) for (const s of (t.cov && t.cov.d[id]) || []) set.add(s);
+    return set;
+  };
+  /* Встреченные объекты и парки: «район:номер» (парки с префиксом p). */
+  C.met = () => {
+    const set = new Set();
+    for (const t of tracks.items) if (t.cov) { for (const k of t.cov.o) set.add(k); for (const k of t.cov.p) set.add('p' + k); }
+    return set;
+  };
+  /* Ключ места, переживающий обновление данных. */
+  C.placeKey = (id, cat, name) => id + '|' + cat + '|' + name;
+  /* Сводка по району (нужен загруженный файл). */
+  C.stats = async (id) => {
+    const dist = await C.district(id);
+    return { dist, ...Core.districtStats(dist, C.covered(id)) };
+  };
+  /* Районы, где есть хоть один пройденный участок. */
+  C.touched = () => new Set(tracks.items.flatMap((t) => (t.cov ? Object.keys(t.cov.d).map(Number) : [])));
 
   /* Фоновый пересчёт треков без покрытия или со старой версией данных. */
   async function refreshAll() {

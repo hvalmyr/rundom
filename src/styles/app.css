@@ -405,3 +405,78 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .mk-repel::after { content: ""; position: absolute; left: 3px; right: 3px; top: 5px; height: 2px; border-radius: 1px; background: var(--carmine); }
 .mk-rhandle { width: 10px; height: 10px; border-radius: 50%; background: var(--surface); border: 1.5px solid var(--carmine); cursor: ew-resize; }
 .route .edited { grid-column: 1 / -1; color: var(--carmine-strong); font-size: 12px; line-height: 16px; }
+
+/* ---------- покрытие (вкладка «Прогресс») ---------- */
+#map.cov .leaflet-overlay-pane, #map.cov .leaflet-marker-pane, #map.cov .leaflet-shadow-pane,
+#map.cov .leaflet-zones-pane, #map.cov .leaflet-top-pane { display: none; }
+.app:has(#map.cov) .maptools { display: none; }
+.leaflet-pane path.cov-mask { fill: var(--paper); fill-opacity: .9; stroke: none; }
+.leaflet-pane path.cov-mute { fill: var(--paper); fill-opacity: .72; stroke: none; }
+.leaflet-pane path.cov-mkad { fill: none; stroke: var(--ink); stroke-width: 1.6; opacity: .7; }
+.leaflet-pane path.cov-d { fill: var(--petrol); fill-opacity: 0; stroke: var(--surface); stroke-width: 1.2; cursor: pointer; }
+.leaflet-pane path.cov-d.outline { fill-opacity: 0; stroke: var(--ink-muted); stroke-width: 1; }
+.leaflet-pane path.cov-d:hover { stroke: var(--ink); stroke-width: 1.6; }
+.leaflet-pane path.cov-d.sel { stroke: var(--ink); stroke-width: 2.4; }
+.cv0 { --cv: .05; } .cv1 { --cv: .1; } .cv2 { --cv: .15; } .cv3 { --cv: .2; } .cv4 { --cv: .26; }
+.cv5 { --cv: .32; } .cv6 { --cv: .39; } .cv7 { --cv: .46; } .cv8 { --cv: .54; } .cv9 { --cv: .62; }
+.leaflet-pane path.cov-d[class*=" cv"] { fill-opacity: var(--cv); }
+.leaflet-pane path.cov-pl { stroke-width: 1.6; }
+.leaflet-pane path.cov-pl.st0 { fill: var(--surface); stroke: var(--ink-muted); }
+.leaflet-pane path.cov-pl.st1 { fill: var(--petrol); stroke: var(--surface); }
+.leaflet-pane path.cov-pl.st2 { fill: var(--carmine); stroke: var(--surface); }
+.leaflet-pane path.cov-park { fill: var(--petrol); fill-opacity: .08; stroke: var(--petrol); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.leaflet-pane path.cov-park.st0 { fill-opacity: 0; stroke: var(--ink-muted); }
+.leaflet-pane path.cov-park.st2 { stroke: var(--carmine); }
+.leaflet-pane path.cov-hl { fill: none; stroke: var(--carmine); stroke-width: 5; opacity: .55; stroke-linecap: round; }
+
+.ccards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.ccard { background: var(--surface-sunk); border-radius: var(--radius-md); padding: 10px 12px; font-size: 12px; line-height: 16px; }
+.ccard .cbig { font: 600 22px/28px var(--font-display); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.covctl { display: flex; flex-direction: column; gap: var(--space-2); }
+.legend10 { display: flex; align-items: center; gap: var(--space-2); font-size: 12px; }
+#covLegend { display: flex; flex: 1; height: 10px; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+#covLegend span { flex: 1; background: color-mix(in srgb, var(--petrol) calc(var(--cv) * 100%), var(--paper)); }
+.bar { height: 5px; border-radius: 3px; background: var(--surface-sunk); overflow: hidden; }
+.bar > div { height: 100%; background: var(--petrol); border-radius: 3px; }
+
+.drows { display: flex; flex-direction: column; }
+.drow, .srow { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 70px 46px; gap: var(--space-2); align-items: center;
+  padding: 5px 4px; font-size: 13px; line-height: 18px; cursor: pointer; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.drow:hover, .srow:hover { background: var(--surface-sunk); }
+.drow:focus-visible, .srow:focus-visible { outline: 2px solid var(--focus); }
+.drow.on { background: var(--petrol-tint); }
+.drow .n, .srow .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drow .p, .srow .p { text-align: right; }
+.srow { grid-template-columns: minmax(0, 1fr) 56px 46px; }
+.srow .k { text-align: right; }
+.srow .k { color: var(--ink-muted); font-size: 12px; }
+.srow.muted { cursor: default; color: var(--ink-muted); }
+
+.dpanel {
+  position: absolute; top: 12px; right: 12px; bottom: 12px; z-index: 550; width: min(360px, calc(100% - 24px)); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-float);
+  padding: var(--space-3) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2);
+}
+.dpanel[hidden] { display: none; }
+#dpanelSlot .dpanel { position: static; width: auto; box-shadow: none; overflow: visible; }
+.dp-head { display: flex; justify-content: space-between; align-items: center; }
+.dp-head h2 { margin: 0; font: 600 18px/24px var(--font-display); }
+.dp-big { font: 600 28px/32px var(--font-display); color: var(--petrol); font-variant-numeric: tabular-nums; }
+.dp-line { font-size: 13px; line-height: 18px; }
+.dp-body { display: flex; flex-direction: column; gap: var(--space-2); }
+.dp-body .about { margin: 0; font-size: 14px; line-height: 21px; }
+.dp-body .src { font-size: 12px; color: var(--ink-muted); }
+.muted { color: var(--ink-muted); }
+
+.plist { display: flex; flex-direction: column; }
+.prow { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: var(--space-2); align-items: center; padding: 4px 0; }
+.pdot { width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }
+.pdot.st0 { border: 1.5px solid var(--ink-muted); }
+.pdot.st1 { background: var(--petrol); }
+.pdot.st2 { background: var(--carmine); }
+.pname { all: unset; cursor: pointer; font-size: 13px; line-height: 18px; min-width: 0; }
+.pname:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pname:focus-visible { outline: 2px solid var(--focus); }
+.pname small { display: block; color: var(--ink-muted); font-size: 12px; line-height: 16px; }
+#placeDist { width: 100%; }
+.pop .btns { display: flex; gap: 6px; flex-wrap: wrap; }

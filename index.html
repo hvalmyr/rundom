@@ -194,6 +194,9 @@
       <p class="status" id="status" role="status"></p>
       <div class="results" id="results"></div>
       <button class="btn" id="more" type="button" hidden>Ещё варианты</button>
+      <h2 class="sec">Места для маршрута</h2>
+      <label class="check"><input type="checkbox" id="showOsm"><span>Показывать на карте<small>Смотровые, храмы, памятники, музеи, парки. Подгружаются сами при приближении. Нажмите на место, чтобы маршрут прошёл через него</small></span></label>
+      <div class="coord" id="osmInfo"></div>
     </section>
 
     <!-- ===== Библиотека ===== -->
@@ -213,15 +216,19 @@
 
     <!-- ===== Прогресс ===== -->
     <section class="tabpane" id="pane-progress" role="tabpanel" aria-labelledby="tab-progress" hidden>
-      <div class="stats-head">
-        <div><div class="stat" id="progKm">0</div><div class="muted">км пробежек в библиотеке</div></div>
-        <div><div class="stat" id="progCount">0</div><div class="muted">треков и отметок</div></div>
+      <div class="ccards" id="covCards"></div>
+      <p class="hint" id="covNote" hidden>Данные покрытия улиц не загрузились. Проверьте подключение и откройте вкладку ещё раз.</p>
+      <div class="covctl">
+        <div class="legend10"><span class="muted">0%</span><div id="covLegend"></div><span class="muted">100%</span></div>
+        <label class="check"><input type="checkbox" id="covOutline"><span>Только контуры</span></label>
+        <label class="check"><input type="checkbox" id="covPlacesOn"><span>Места на карте</span></label>
       </div>
-      <p class="hint">Карта покрытия улиц внутри МКАД с процентами по районам, парки и достопримечательности появятся здесь в следующих этапах.</p>
-      <h2 class="sec">Места из OpenStreetMap</h2>
-      <label class="check"><input type="checkbox" id="showOsm"><span>Показывать на карте<small>Смотровые, достопримечательности, памятники, фонтаны, парки. Нажмите на место, чтобы маршрут прошёл через него</small></span></label>
-      <div class="btns"><button class="btn" id="loadOsm" type="button">Загрузить в видимой области</button></div>
-      <div class="coord" id="osmInfo"></div>
+      <div id="dpanelSlot"></div>
+      <h2 class="sec">Районы</h2>
+      <div class="drows" id="covDistricts"></div>
+      <h2 class="sec">Места</h2>
+      <select id="placeDist" aria-label="Район"></select>
+      <div id="covPlaces"></div>
     </section>
   </aside>
 

@@ -8,6 +8,9 @@ import { hav, px, py, polyLength, pointInRing } from './geo.js';
 
 const Q = 1e5, SEG = 25, PROBE = 5, SHARE = 0.6, OBJ_NEAR = 40, OBJ_STREET = 60;
 const CELL = 50, KEY = 100003;
+/* версия правил расчёта: при её смене покрытие треков пересчитывается */
+const COVER_VERSION = 2;
+const ALONG = Math.PI / 4; /* трек засчитывается, если идёт вдоль участка (±45°), а не поперёк */
 
 function decodeLine(c, o) {
   const pts = [];
@@ -108,31 +111,35 @@ function decodeDistrict(f) {
   };
 }
 
-/* Точки трека в сетке 50 м. */
+/* Точки трека в сетке 50 м: x, y и направление движения. */
 function trackGrid(lines) {
   const map = new Map(), pts = [];
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const line of lines) {
     if (line.length < 2) continue;
-    for (const q of along(line, PROBE)) {
-      const x = px(q[1]), y = py(q[0]);
+    const q = along(line, PROBE).map((p) => [px(p[1]), py(p[0])]);
+    for (let i = 0; i < q.length; i++) {
+      const [x, y] = q[i], a = q[Math.max(0, i - 1)], b = q[Math.min(q.length - 1, i + 1)];
+      const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
       const k = Math.floor(x / CELL) * KEY + Math.floor(y / CELL);
-      const a = map.get(k);
-      if (a) a.push(x, y); else map.set(k, [x, y]);
+      const arr = map.get(k);
+      if (arr) arr.push(x, y, ang); else map.set(k, [x, y, ang]);
       pts.push(x, y);
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
     }
   }
   return { map, pts, box: [x0, y0, x1, y1] };
 }
-function near(map, x, y, tol) {
+const angDiff = (a, b) => { const d = Math.abs(a - b) % Math.PI; return Math.min(d, Math.PI - d); };
+/* есть ли точка трека ближе tol; с направлением dir — только идущая вдоль него */
+function near(map, x, y, tol, dir) {
   const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL), R = tol > CELL ? 2 : 1, t2 = tol * tol;
   for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) {
     const a = map.get((cx + i) * KEY + (cy + j));
     if (!a) continue;
-    for (let q = 0; q < a.length; q += 2) {
+    for (let q = 0; q < a.length; q += 3) {
       const dx = a[q] - x, dy = a[q + 1] - y;
-      if (dx * dx + dy * dy <= t2) return true;
+      if (dx * dx + dy * dy <= t2 && (dir === undefined || angDiff(a[q + 2], dir) <= ALONG)) return true;
     }
   }
   return false;
@@ -148,9 +155,10 @@ function coverTrack(dist, lines, grid) {
     const tol = dist.streets[dist.segStreet[s]].t;
     if (B[4 * s] > tx1 + tol || B[4 * s + 2] < tx0 - tol || B[4 * s + 1] > ty1 + tol || B[4 * s + 3] < ty0 - tol) continue;
     const p0 = dist.probeStart[s], p1 = dist.probeStart[s + 1], need = Math.ceil((p1 - p0) * SHARE);
+    const P = dist.probes, dir = Math.atan2(P[2 * p1 - 1] - P[2 * p0 + 1], P[2 * p1 - 2] - P[2 * p0]);
     let hit = 0, miss = 0;
     for (let p = p0; p < p1; p++) {
-      if (near(tg.map, dist.probes[2 * p], dist.probes[2 * p + 1], tol)) { if (++hit >= need) break; }
+      if (near(tg.map, P[2 * p], P[2 * p + 1], tol, dir)) { if (++hit >= need) break; }
       else if (++miss > p1 - p0 - need) break;
     }
     if (hit >= need) segs.push(s);
@@ -194,4 +202,4 @@ function decodeRing(flat) {
   return pts;
 }
 
-export { decodeDistrict, trackGrid, coverTrack, districtsTouched, districtStats, decodeRing };
+export { COVER_VERSION, decodeDistrict, trackGrid, coverTrack, districtsTouched, districtStats, decodeRing };

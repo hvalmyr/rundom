@@ -21,7 +21,7 @@ const LEGEND = [
 ];
 
 /* дом, выходы, закрытия и зоны: тоже в копии (версия 3) */
-const PLACES = ['home', 'exits', 'ringStart', 'blocks', 'zones', 'openGates'];
+const PLACES = ['home', 'exits', 'ringStart', 'blocks', 'zones', 'openGates', 'visited'];
 
 export function initSettings(app) {
   const dlg = $('#settings');

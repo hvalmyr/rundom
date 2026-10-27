@@ -16,7 +16,8 @@ import { initDirection } from './ui/direction.js';
 import { initRope } from './ui/rope.js';
 import { initLibraryPanel } from './ui/library-panel.js';
 import { initCoverage } from './ui/coverage.js';
-import { initProgressPanel } from './ui/progress-panel.js';
+import { initPlaces } from './ui/places.js';
+import { initCoverageMap } from './ui/coverage-map.js';
 import { initSettings } from './ui/settings.js';
 
 const { map, layers, svg, svgTop, setTiles, toggleLayer } = createMap();
@@ -35,7 +36,7 @@ if (store.explored.length) {
 
 const listeners = {};
 const app = {
-  map, layers, svg, svgTop, setTiles, tracks, favorites,
+  map, layers, svg, svgTop, setTiles, tracks, favorites, tab: 'route',
   S: {
     mode: null, routes: [], sel: -1, net: null, graph: null, graphKey: '', router: null,
     osmPois: [], forced: [], busy: false, abort: null, lastGen: null
@@ -54,6 +55,7 @@ for (const t of TABS) {
     }
     $('#panel').scrollTop = 0;
     app.sheet.open();
+    app.tab = t; app.emit('tab');
   });
 }
 
@@ -82,7 +84,8 @@ initRoutePanel(app);
 initRope(app);
 initCoverage(app);
 initLibraryPanel(app);
-initProgressPanel(app);
+initPlaces(app);
+initCoverageMap(app);
 initSettings(app);
 syncLayers();
 
