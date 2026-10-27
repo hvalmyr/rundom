@@ -92,6 +92,12 @@
       <div class="dirbox" id="compassBox" hidden>
         <svg class="rose" id="rose" viewBox="-62 -62 124 124" role="group" aria-label="Сторона света"></svg>
         <div class="slider">
+          <label for="dirBearing">Направление</label>
+          <span class="deg"><span id="outSide"></span><input type="number" id="dirDeg" min="0" max="359" step="1" inputmode="numeric" aria-label="Направление в градусах">°</span>
+          <input type="range" id="dirBearing" min="0" max="359" step="1">
+          <div class="ends"><span>С 0°</span><span>В 90°</span><span>Ю 180°</span><span>З 270°</span><span>359°</span></div>
+        </div>
+        <div class="slider">
           <label for="dirSpread">Точность направления</label><output id="outSpread"></output>
           <input type="range" id="dirSpread" min="15" max="60" step="5">
           <div class="ends"><span>точнее</span><span>свободнее</span></div>
@@ -227,7 +233,6 @@
       <p class="hint" id="covNote" hidden>Данные покрытия улиц не загрузились. Проверьте подключение и откройте вкладку ещё раз.</p>
       <div class="covctl">
         <div class="legend10"><span class="muted">0%</span><div id="covLegend"></div><span class="muted">100%</span></div>
-        <label class="check"><input type="checkbox" id="covPlacesOn"><span>Места на карте</span></label>
       </div>
       <div id="dpanelSlot"></div>
       <div class="seg" id="covListSeg" role="group" aria-label="Список">
@@ -235,7 +240,16 @@
       </div>
       <div class="drows" id="covDistricts"></div>
       <div class="covplaces" id="covPlacesBox" hidden>
-        <select id="placeDist" aria-label="Район"></select>
+        <div class="pillselect" id="placePick">
+          <div class="ps-box">
+            <div class="ps-main">
+              <div class="ps-pills"></div>
+              <input type="text" role="combobox" aria-expanded="false" aria-controls="placeSug" aria-autocomplete="list"
+                placeholder="Все районы" autocomplete="off" aria-label="Районы: найти и выбрать">
+            </div>
+          </div>
+          <div class="sug" id="placeSug" role="listbox" aria-multiselectable="true" aria-label="Районы" hidden></div>
+        </div>
         <div id="covPlaces"></div>
       </div>
     </section>
@@ -252,6 +266,23 @@
         <label><input type="checkbox" id="lyGates"><span class="sw gates"></span>Закрытые проходы</label>
         <label><input type="checkbox" id="lyPlaces"><span class="sw places"></span>Места</label>
         <p class="mt-note" id="osmInfo"></p>
+      </div>
+    </div>
+    <div class="maptools cov-tools" id="covTools">
+      <button class="mt-toggle" id="covToolsToggle" type="button" aria-expanded="false" aria-controls="covToolsBody" title="Слои и обозначения">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg><span>Слои</span>
+      </button>
+      <div class="mt-body" id="covToolsBody" hidden>
+        <label><input type="checkbox" id="covStreetsOn"><span class="sw walked"></span>Пройденные улицы</label>
+        <label><input type="checkbox" id="covPlacesOn"><span class="sw sights"></span>Достопримечательности</label>
+        <div class="mt-legend" aria-label="Обозначения">
+          <span class="lg"><span class="lg-mk st0" aria-hidden="true"></span>не исследована</span>
+          <span class="lg"><span class="lg-mk st1" aria-hidden="true"></span>встречена на пробежке</span>
+          <span class="lg"><span class="lg-mk st2" aria-hidden="true"></span>исследована</span>
+          <span class="lg"><span class="lg-ln off" aria-hidden="true"></span>улица не пройдена</span>
+          <span class="lg"><span class="lg-ln on" aria-hidden="true"></span>улица пройдена</span>
+          <span class="lg"><span class="lg-fill" aria-hidden="true"></span>заливка района — доля пройденных улиц</span>
+        </div>
       </div>
     </div>
     <div class="banner" id="banner" hidden><span id="bannerText"></span><div class="btns"><button type="button" id="bannerOk" hidden>Готово</button><button type="button" id="bannerUndo" hidden>Отменить точку</button><button type="button" id="bannerCancel">Отмена</button></div></div>

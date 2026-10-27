@@ -6,6 +6,7 @@ import { store, save } from '../storage/store.js';
 import { cssVar } from '../map/map.js';
 import { $, el, fmtKm, fmt1, syncSeg } from './dom.js';
 import { placeMarker, placeSvg } from './place-icons.js';
+import { pillSelect } from './pill-select.js';
 
 const CAT = {
   park: 'парк', view: 'смотровая', worship: 'храм', monument: 'памятник', museum: 'музей',
@@ -37,11 +38,15 @@ export function initCoverageMap(app) {
   const maskR = L.svg({ pane: pane('covMask', 384), padding: 0.5 });
   const fillR = L.svg({ pane: pane('covFill', 386), padding: 0.3 });
   const lineR = L.canvas({ pane: pane('covLines', 388), padding: 0.3 });
+  /* холст улиц лежит над районами: без этого он забирает щелчки, и район не выбрать */
+  map.getPane('covLines').style.pointerEvents = 'none';
   const topR = L.svg({ pane: pane('covTop', 430), padding: 0.3 });
+  /* значки мест — в своей панели: обычная панель маркеров во вкладке скрыта */
+  pane('covMarks', 640);
   const G = { base: L.layerGroup(), fill: L.layerGroup(), lines: L.layerGroup(), sel: L.layerGroup(), places: L.layerGroup() };
 
   let active = false, built = false, selected = null, tab = 'streets', sortBy = 'share', streetShown = 60;
-  let placeCat = 'all', placeDist = 'all', placeShown = 12, dCat = 'all', distShown = 8, focus = null, segFrom = null;
+  let placeCat = 'all', placeDists = [], placeShown = 12, dCat = 'all', distShown = 8, focus = null, segFrom = null;
   const polys = new Map(), stats = new Map();
   const lineCache = new Map();
   let met = new Set(), version = 0, allLoaded = false;
@@ -142,6 +147,7 @@ export function initCoverageMap(app) {
   let drawSeq = 0;
   async function drawStreets() {
     const seq = ++drawSeq;
+    if (!store.layers.covStreets) { G.lines.clearLayers(); return; }
     const ids = new Set(inView(STREETS_ZOOM));
     if (selected) ids.add(selected);
     const dists = [];
@@ -168,8 +174,8 @@ export function initCoverageMap(app) {
           G.places.addLayer(L.polygon(p.rings, { renderer: topR, className: 'cov-park st' + p.st, interactive: false }));
         }
         const on = isFocus(p);
-        const m = L.marker([p.lat, p.lon], { icon: placeMarker(p.c, 'st' + p.st + (on ? ' on' : '')), title: p.n, keyboard: false, zIndexOffset: on ? 1000 : 0 });
-        m.bindPopup(() => placePopup(p), { maxWidth: 280, className: 'place-pop' });
+        const m = L.marker([p.lat, p.lon], { pane: 'covMarks', icon: placeMarker(p.c, 'st' + p.st + (on ? ' on' : '')), title: p.n, keyboard: false, zIndexOffset: on ? 1000 : 0 });
+        m.bindPopup(() => placePopup(p), popOpts());
         m.on('popupopen', () => setFocus(p));
         m.on('popupclose', () => setFocus(null));
         G.places.addLayer(m);
@@ -238,13 +244,22 @@ export function initCoverageMap(app) {
     save();
     renderAll(false);
   }
+  /* карточка места на карте не прячется под листом на телефоне: снизу отступ на его видимую часть */
+  const popOpts = () => {
+    const sheet = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-visible')) || 0;
+    return { maxWidth: 280, className: 'place-pop', autoPanPaddingTopLeft: [16, 16], autoPanPaddingBottomRight: [16, 16 + (phone.matches ? sheet : 0)] };
+  };
   function showPlace(p) {
     if (p.id !== selected) select(p.id, false);
-    map.setView([p.lat, p.lon], Math.max(map.getZoom(), 16));
-    setFocus(p);
-    L.popup({ maxWidth: 280, className: 'place-pop' }).setLatLng([p.lat, p.lon]).setContent(placePopup(p))
-      .on('remove', () => setFocus(null)).openOn(map);
+    /* на телефоне сначала сворачиваем лист: карточка открывается на карте уже нужного размера и целиком сдвигается в вид */
     if (app.sheet) app.sheet.peek();
+    setFocus(p);
+    setTimeout(() => {
+      map.invalidateSize();
+      map.setView([p.lat, p.lon], Math.max(map.getZoom(), 16), { animate: false });
+      L.popup(popOpts()).setLatLng([p.lat, p.lon]).setContent(placePopup(p))
+        .on('remove', () => setFocus(null)).openOn(map);
+    }, 260);
   }
 
   /* ---------- панель района ---------- */
@@ -343,13 +358,16 @@ export function initCoverageMap(app) {
       const known = places.filter((p) => p.w && p.w.t).sort((a, b) => (!!b.w.i - !!a.w.i) || CAT_ORDER.indexOf(a.c) - CAT_ORDER.indexOf(b.c));
       if (known.length) {
         body.append(el('h3', { class: 'dp-sub' }, 'Что посмотреть'),
+          /* фото над названием, справа от фото — откуда текст и чьё фото */
           el('div', { class: 'sights' }, known.slice(0, 12).map((p) => el('article', { class: 'sight' },
-            p.w.i ? el('img', { src: p.w.i.s, alt: '', loading: 'lazy', decoding: 'async' }) : el('span', { class: 'sight-ic', html: placeSvg(p.c) }),
-            el('div', null,
-              el('button', { class: 'pname', type: 'button', onclick: () => showPlace(p) }, Core.placeName({ name: p.n, cat: p.c })),
-              el('p', null, p.w.t),
-              el('small', null, el('a', { href: p.w.u, target: '_blank', rel: 'noopener' }, 'Википедия, CC BY-SA'),
-                p.w.i ? [' · фото: ', el('a', { href: p.w.i.f, target: '_blank', rel: 'noopener' }, p.w.i.a + ', ' + p.w.i.l)] : null))))));
+            el('div', { class: 'sight-top' },
+              p.w.i ? el('img', { src: p.w.i.s, alt: '', loading: 'lazy', decoding: 'async' }) : el('span', { class: 'sight-ic', html: placeSvg(p.c) }),
+              el('div', { class: 'sight-src' },
+                el('a', { href: p.w.u, target: '_blank', rel: 'noopener' }, 'Википедия'),
+                el('span', null, 'текст: CC BY-SA'),
+                p.w.i ? el('span', null, 'фото: ', el('a', { href: p.w.i.f, target: '_blank', rel: 'noopener' }, p.w.i.a), ', ' + p.w.i.l) : null)),
+            el('button', { class: 'pname', type: 'button', onclick: () => showPlace(p) }, Core.placeName({ name: p.n, cat: p.c })),
+            el('p', null, p.w.t)))));
       }
     }
   }
@@ -409,15 +427,37 @@ export function initCoverageMap(app) {
     let done = 0;
     for (const id of stats.keys()) done += doneOf(id);
     const visited = Object.keys(store.visited);
-    const vPark = visited.filter((k) => k.split('|')[1] === 'park').length;
-    const metObj = [...met].filter((k) => k[0] !== 'p').length, metPark = met.size - metObj;
-    const obTotal = I.d.reduce((s, d) => s + d.ob, 0), pkTotal = I.d.reduce((s, d) => s + d.pk, 0);
-    const card = (label, big, sub) => el('div', { class: 'ccard' }, el('div', { class: 'muted' }, label), el('div', { class: 'cbig' }, big), el('div', { class: 'muted' }, sub));
+    const total = I.d.reduce((s, d) => s + d.ob + d.pk, 0);
+    const runs = app.tracks.items, runKm = runs.reduce((s, t) => s + (t.km || 0), 0), freshKm = runs.reduce((s, t) => s + (t.newKm || 0), 0);
+    const kmTxt = (km) => (Math.round(km * 10) / 10).toLocaleString('ru-RU');
+    const card = (label, big, sub, attrs) => el(attrs ? 'button' : 'div', { class: 'ccard', ...attrs },
+      el('div', { class: 'muted' }, label), el('div', { class: 'cbig' }, big), el('div', { class: 'muted' }, sub));
     $('#covCards').replaceChildren(
       card('Улицы МКАД', pct(done / (I.km * 1000)), fmtKm(done) + ' из ' + Math.round(I.km).toLocaleString('ru-RU') + ' км'),
       card('Районы', [...polys.keys()].filter((id) => shareOf(id) >= 0.05).length + ' / ' + I.d.length, 'с покрытием от 5%'),
-      card('Места', metObj + ' / ' + obTotal.toLocaleString('ru-RU'), 'встречено · ' + (visited.length - vPark) + ' исследовал'),
-      card('Парки', metPark + ' / ' + pkTotal, 'встречено · ' + vPark + ' исследовал'));
+      card('Места', met.size + ' / ' + total.toLocaleString('ru-RU'), 'встречено · ' + visited.length + ' исследовал', {
+        type: 'button', 'aria-expanded': String(catsOpen), 'aria-controls': 'covCats', title: 'Места по типам',
+        onclick: () => { catsOpen = !catsOpen; renderCards(); }
+      }),
+      card('Пробежки', String(runs.length), runs.length ? kmTxt(runKm) + ' км · ' + kmTxt(freshKm) + ' км новых улиц' : 'загрузите трек в «Библиотеке»'),
+      catsOpen ? catCards() : '');
+  }
+  /* места по типам: сколько встречено и исследовано из всех; считается по разобранным файлам районов */
+  let catsOpen = false;
+  function catCards() {
+    const all = [...decoded.values()].flatMap(placesOf);
+    if (!allLoaded) return el('p', { class: 'hint ccats', id: 'covCats' }, 'Считаем места по районам…');
+    return el('div', { class: 'ccats', id: 'covCats' }, CAT_ORDER.filter((c) => all.some((p) => p.c === c)).map((c) => {
+      const list = all.filter((p) => p.c === c), m = list.filter((p) => p.st > 0).length, v = list.filter((p) => p.st === 2).length;
+      return el('button', {
+        class: 'ccat', type: 'button', title: 'Показать в списке',
+        onclick: () => { placeCat = c; placeShown = 12; store.layers.covList = 'places'; save(); syncList(); renderPlaceList(); $('#covListSeg').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      }, el('span', { class: 'ic', 'aria-hidden': 'true', html: placeSvg(c) }),
+      el('span', { class: 'cn' }, CAT[c][0].toUpperCase() + CAT[c].slice(1)),
+      el('span', { class: 'cv' }, m + ' / ' + list.length),
+      el('span', { class: 'cs' }, v ? 'исследовал ' + v : ''),
+      el('span', { class: 'cb', 'aria-hidden': 'true' }, el('span', { style: 'width:' + (100 * m / list.length).toFixed(1) + '%' })));
+    }));
   }
   /* районы — свёрнутым списком: длинный список не прячет места ниже */
   function renderDistricts() {
@@ -437,7 +477,7 @@ export function initCoverageMap(app) {
     const box = $('#covPlaces');
     const dists = [];
     for (const d of idx().d) {
-      if (placeDist !== 'all' && d.id !== Number(placeDist)) continue;
+      if (placeDists.length && !placeDists.includes(d.id)) continue;
       const p = loadedDist(d.id);
       if (p) dists.push(p);
     }
@@ -448,7 +488,7 @@ export function initCoverageMap(app) {
       catChips(all, placeCat, (c) => { placeCat = c; placeShown = 12; renderPlaceList(); }),
       el('div', { class: 'plist' }, list.slice(0, placeShown).map((p) => {
         const row = placeRow(p);
-        if (placeDist === 'all') row.querySelector('small').append(' · ' + info(p.id).n);
+        if (placeDists.length !== 1) row.querySelector('small').append(' · ' + info(p.id).n);
         return row;
       })),
       list.length > placeShown ? el('button', { class: 'btn small more-btn', type: 'button', onclick: () => { placeShown += 40; renderPlaceList(); } }, 'Показать ещё') : '',
@@ -469,15 +509,16 @@ export function initCoverageMap(app) {
     };
     await Promise.all([worker(), worker(), worker(), worker()]);
     allLoaded = true;
-    if (active) renderPlaceList();
+    if (active) { renderPlaceList(); if (catsOpen) renderCards(); }
   }
-  function fillDistSelect() {
-    const sel = $('#placeDist');
-    sel.replaceChildren(el('option', { value: 'all' }, 'Все районы'),
-      ...idx().d.slice().sort((a, b) => a.n.localeCompare(b.n, 'ru')).map((d) => el('option', { value: String(d.id) }, d.n)));
-    sel.value = placeDist;
-  }
-  $('#placeDist').addEventListener('change', (e) => { placeDist = e.target.value; placeShown = 12; renderPlaceList(); });
+  /* фильтр мест по районам — то же поле с пилюлями, что и на вкладке маршрута; пусто — все районы */
+  const placePick = pillSelect($('#placePick'), {
+    options: () => idx().d,
+    selected: () => placeDists,
+    name: (id) => (idx().d.find((d) => d.id === id) || {}).n,
+    toggle: (id, adding) => { placeDists = adding ? [...placeDists, id] : placeDists.filter((x) => x !== id); placeShown = 12; placePick.render(); renderPlaceList(); },
+    placeholder: ['Все районы', 'Ещё район']
+  });
 
   function renderAll(redrawStreets = true) {
     if (!active) { renderPanel(); return; }
@@ -499,8 +540,15 @@ export function initCoverageMap(app) {
     store.layers.covList = b.dataset.list; save(); syncList();
   });
   syncList();
-  const syncChecks = () => { $('#covPlacesOn').checked = store.layers.covPlaces; };
+  /* слои вкладки: улицы и места включаются отдельно; обозначения свёрнуты в кнопку, как на карте маршрута */
+  const syncChecks = () => {
+    $('#covPlacesOn').checked = store.layers.covPlaces; $('#covStreetsOn').checked = store.layers.covStreets;
+    $('#covToolsToggle').setAttribute('aria-expanded', String(!!store.layers.covToolsOpen));
+    $('#covToolsBody').hidden = !store.layers.covToolsOpen;
+  };
   $('#covPlacesOn').addEventListener('change', (e) => { store.layers.covPlaces = e.target.checked; save(); drawPlaces(); });
+  $('#covStreetsOn').addEventListener('change', (e) => { store.layers.covStreets = e.target.checked; save(); drawStreets(); });
+  $('#covToolsToggle').addEventListener('click', () => { store.layers.covToolsOpen = !store.layers.covToolsOpen; save(); syncChecks(); });
   $('#covLegend').replaceChildren(...[...Array(10)].map((_, k) => el('span', { class: 'cv' + k, title: k * 10 + '–' + (k + 1) * 10 + '%' })));
 
   /* ---------- вход и выход из режима ---------- */
@@ -514,7 +562,7 @@ export function initCoverageMap(app) {
     if (!(await C.ready)) { $('#covNote').hidden = false; return; }
     if (!active) return;
     await build();
-    if (!decoded.size) { fillDistSelect(); loadAll(); }
+    if (!decoded.size) { placePick.render(); loadAll(); }
     await computeStats();
     if (active) renderAll();
   }

@@ -101,26 +101,39 @@ export function initRoutePanel(app) {
     }, () => toast('Не удалось определить местоположение.'), { enableHighAccuracy: true, timeout: 10000 });
   });
 
-  /* ---------- дистанция: быстрые пресеты; «+» превращается в поле, Enter сохраняет ---------- */
+  /* ---------- дистанция: быстрые пресеты; «+» превращается в поле, Enter сохраняет ----------
+     Нажатие на другую дистанцию выбирает её. Нажатие на выбранную взводит удаление (пилюля краснеет,
+     полоса убывает 3 с), повторное — удаляет; выбор переходит на соседнюю дистанцию. */
+  let armedKm = null, armTimer = null;
+  const disarm = () => { clearTimeout(armTimer); if (armedKm !== null) { armedKm = null; renderKm(); } };
   function renderKm() {
     const box = $('#kmChips');
     const p = store.prefs;
     if (!p.kmPresets.includes(p.km)) p.kmPresets = [...p.kmPresets, p.km].sort((a, b) => a - b);
     box.innerHTML = '';
     for (const km of p.kmPresets) {
+      const on = km === p.km, armed = on && armedKm === km;
       const chip = el('button', {
-        class: 'chip', type: 'button', 'aria-pressed': String(km === p.km),
-        title: 'Правый клик или долгое нажатие — удалить', onclick: () => { p.km = km; renderKm(); save(); app.emit('km'); }
-      }, fmtNum(km));
-      let press = null;
-      const remove = () => {
-        if (p.kmPresets.length <= 1) return;
-        p.kmPresets = p.kmPresets.filter((x) => x !== km);
-        renderKm(); save(); toast('Дистанция ' + fmtNum(km) + ' км убрана из быстрых.');
-      };
-      chip.addEventListener('contextmenu', (e) => { e.preventDefault(); remove(); });
-      chip.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') press = setTimeout(remove, 600); });
-      ['pointerup', 'pointerleave', 'pointercancel'].forEach((t) => chip.addEventListener(t, () => clearTimeout(press)));
+        class: 'chip' + (armed ? ' arm' : ''), type: 'button', 'aria-pressed': String(on),
+        'aria-label': armed ? 'Удалить дистанцию ' + fmtNum(km) + ' км' : fmtNum(km) + ' км',
+        title: armed ? 'Нажмите ещё раз, чтобы удалить' : on ? 'Нажмите, чтобы удалить' : '',
+        onclick: () => {
+          if (!on) { armedKm = null; p.km = km; renderKm(); save(); app.emit('km'); return; }
+          if (!armed) {
+            if (p.kmPresets.length <= 1) { toast('Последнюю дистанцию не удалить.'); return; }
+            armedKm = km; renderKm(); $('#kmChips .chip.arm').focus();
+            clearTimeout(armTimer); armTimer = setTimeout(disarm, 3000);
+            return;
+          }
+          clearTimeout(armTimer); armedKm = null;
+          const i = p.kmPresets.indexOf(km);
+          p.kmPresets = p.kmPresets.filter((x) => x !== km);
+          p.km = p.kmPresets[Math.min(i, p.kmPresets.length - 1)];
+          renderKm(); save(); app.emit('km');
+          toast('Дистанция ' + fmtNum(km) + ' км удалена.');
+        }
+      }, armed ? el('span', { class: 'arm-row' }, el('span', { class: 'x', 'aria-hidden': 'true' }, '×'), fmtNum(km)) : fmtNum(km));
+      if (armed) chip.addEventListener('blur', () => setTimeout(() => { if (!$('#kmChips').contains(document.activeElement)) disarm(); }, 0));
       box.appendChild(chip);
     }
     const add = el('button', {

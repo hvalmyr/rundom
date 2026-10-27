@@ -3,7 +3,8 @@ import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { divIcon } from '../map/map.js';
-import { $, el, syncSeg, toast, ICON } from './dom.js';
+import { $, el, syncSeg, toast } from './dom.js';
+import { pillSelect } from './pill-select.js';
 
 const SIDES = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];
 const NS = 'http://www.w3.org/2000/svg';
@@ -61,6 +62,10 @@ export function initDirection(app) {
       rose.appendChild(svgEl('line', { class: 'needle', x1: (21 * Math.cos(a)).toFixed(1), y1: (21 * Math.sin(a)).toFixed(1), x2: (60 * Math.cos(a)).toFixed(1), y2: (60 * Math.sin(a)).toFixed(1) }));
     }
     $('#outSpread').textContent = '±' + P.dirSpread + '°';
+    const deg = ((Math.round(P.dirBearing) % 360) + 360) % 360;
+    $('#dirBearing').value = deg;
+    if (document.activeElement !== $('#dirDeg')) $('#dirDeg').value = deg;
+    $('#outSide').textContent = app.sideName(deg);
     $('#dirSpread').value = P.dirSpread;
   }
 
@@ -118,16 +123,19 @@ export function initDirection(app) {
     P.districts = P.districts.includes(id) ? P.districts.filter((x) => x !== id) : [...P.districts, id];
     changed();
   }
-  /* выбранные районы — пилюли в поле поиска: у каждой свой крестик, справа — выбор на карте */
+  const distPick = pillSelect($('#distPick'), {
+    options: async () => (await app.loadDistricts()).list,
+    selected: () => P.districts,
+    name: (id) => (byId(id) || {}).n,
+    toggle: (id, adding, d) => { toggle(id); if (adding && d) map.fitBounds(L.polygon(d.p).getBounds(), { padding: [40, 40] }); },
+    placeholder: ['Найти район', 'Ещё район']
+  });
+  /* выбранные районы — пилюли в поле поиска (pill-select.js), справа — выбор на карте */
   function renderChips() {
-    const box = $('#distChips');
-    box.replaceChildren(...P.districts.map(byId).filter(Boolean).map((d) =>
-      el('span', { class: 'pill' }, d.n,
-        el('button', { type: 'button', 'aria-label': 'Убрать ' + d.n, html: ICON.remove, onclick: (e) => { e.stopPropagation(); toggle(d.id); } }))));
+    distPick.render();
     const mapBtn = $('#distMap');
     mapBtn.setAttribute('aria-pressed', String(picking()));
     mapBtn.querySelector('span').textContent = picking() ? 'готово' : 'на карте';
-    $('#distSearch').placeholder = P.districts.length ? 'Ещё район' : 'Найти район';
     syncSeg($('#strictSeg'), 'strict', P.distStrict ? '1' : '0');
     syncSeg($('#multiSeg'), 'multi', P.distMulti);
     $('#multiSeg').hidden = P.districts.length < 2;
@@ -142,57 +150,6 @@ export function initDirection(app) {
     if (!P.districts.length) map.setZoom(Math.min(map.getZoom(), 12));
   });
   app.registerMode('districts', { keep: '#districtBox', ok() { app.setMode(null); }, leave() { setTimeout(() => { renderDistricts(); renderChips(); }); } });
-
-  /* поиск и выбор района: пустой запрос показывает все районы, щелчок по строке ставит и снимает выбор */
-  const search = $('#distSearch'), sug = $('#distSug'), pick = $('#distPick');
-  let options = [], act = -1;
-  async function openList() {
-    const idx = await app.loadDistricts();
-    const q = norm(search.value.trim());
-    options = idx.list.filter((d) => !q || norm(d.n).includes(q)).sort((a, b) => a.n.localeCompare(b.n, 'ru'));
-    act = q && options.length ? 0 : -1;
-    paintList();
-    sug.hidden = false;
-    search.setAttribute('aria-expanded', 'true');
-  }
-  function paintList() {
-    const sel = new Set(P.districts);
-    sug.replaceChildren(...options.map((d, i) =>
-      el('button', {
-        type: 'button', role: 'option', id: 'dopt' + i, class: i === act ? 'act' : '', 'aria-selected': String(sel.has(d.id)), tabindex: '-1',
-        onmousedown: (e) => e.preventDefault(), onclick: () => choose(d)
-      }, el('span', { class: 'tick', 'aria-hidden': 'true' }), d.n)));
-    if (!options.length) sug.appendChild(el('div', { class: 'none' }, 'Такого района нет'));
-    if (act >= 0) { search.setAttribute('aria-activedescendant', 'dopt' + act); sug.children[act].scrollIntoView({ block: 'nearest' }); }
-    else search.removeAttribute('aria-activedescendant');
-  }
-  function closeList() { sug.hidden = true; search.setAttribute('aria-expanded', 'false'); act = -1; }
-  function choose(d) {
-    const adding = !P.districts.includes(d.id);
-    toggle(d.id);
-    if (adding) map.fitBounds(L.polygon(d.p).getBounds(), { padding: [40, 40] });
-    if (search.value) { search.value = ''; openList(); } else paintList();
-  }
-  search.addEventListener('focus', openList);
-  search.addEventListener('input', openList);
-  search.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (sug.hidden) { openList(); return; }
-      if (options.length) { act = (act + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length; paintList(); }
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (options[act]) choose(options[act]);
-    } else if (e.key === 'Escape') {
-      if (!sug.hidden) { e.stopPropagation(); closeList(); }
-    } else if (e.key === 'Backspace' && !search.value && P.districts.length) {
-      toggle(P.districts[P.districts.length - 1]);
-      if (!sug.hidden) paintList();
-    }
-  });
-  search.addEventListener('blur', () => setTimeout(() => { if (!pick.contains(document.activeElement)) closeList(); }, 120));
-  /* щелчок по пустому месту поля — в поиск */
-  pick.querySelector('.ps-box').addEventListener('click', (e) => { if (!e.target.closest('button, input')) search.focus(); });
 
   /* ---------- переключатели ---------- */
   async function changed() {
@@ -219,6 +176,11 @@ export function initDirection(app) {
     const b = e.target.closest('button'); if (!b) return;
     P.distMulti = b.dataset.multi; changed();
   });
+  /* точный градус: ползунок и поле ввода в панели, кроме ручки на карте и розы */
+  const setBearing = (v) => { P.dirBearing = ((Math.round(v) % 360) + 360) % 360; save(); renderRose(); renderCompass(); };
+  $('#dirBearing').addEventListener('input', (e) => setBearing(parseInt(e.target.value, 10)));
+  $('#dirDeg').addEventListener('input', (e) => { const v = parseInt(e.target.value, 10); if (v >= 0 && v <= 359) setBearing(v); });
+  $('#dirDeg').addEventListener('change', (e) => { const v = parseInt(e.target.value, 10); setBearing(Number.isFinite(v) ? v : P.dirBearing); e.target.value = P.dirBearing; });
   $('#dirSpread').addEventListener('input', (e) => { P.dirSpread = parseInt(e.target.value, 10); save(); renderRose(); renderCompass(); });
 
   /* Ограничение для генератора; null — направление любое. */

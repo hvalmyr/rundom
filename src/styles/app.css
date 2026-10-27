@@ -50,7 +50,8 @@ svg { flex: none; }
 .tabs button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -2px var(--action); }
 
 /* ---------- панель ---------- */
-.panel { overflow: auto; background: var(--paper); border-right: 1px solid var(--line); min-width: 0; overscroll-behavior: contain; }
+/* место под полосу прокрутки занято всегда: когда открытый список удлиняет панель, содержимое не прыгает влево */
+.panel { overflow: auto; scrollbar-gutter: stable; background: var(--paper); border-right: 1px solid var(--line); min-width: 0; overscroll-behavior: contain; }
 .sheet-handle { display: none; }
 .tabpane { padding: var(--space-4) var(--space-4) var(--space-8) max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: var(--space-4); }
 .tabpane[hidden] { display: none; }
@@ -119,10 +120,12 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
 .chip[aria-pressed="true"] { background: var(--action); border-color: var(--action); color: var(--on-action); }
 .chip[aria-pressed="true"]:hover { background: var(--action-strong); border-color: var(--action-strong); }
 .chip.target { background: var(--carmine-tint); border-color: var(--carmine); color: var(--carmine-strong); }
-.chip.add { position: relative; border-color: transparent; color: var(--ink-muted); }
+/* пунктир рисуется по краю самой пилюли: без рамки и без выноса за край, иначе на дробном масштабе экрана
+   верхний и нижний штрихи ложатся на разные доли пикселя и выходят разной толщины */
+.chip.add { position: relative; border: 0; color: var(--ink-muted); }
 /* пунктир с длинным штрихом 6/4: у border-style: dashed длину штриха не задать, рисуем маской в цвет токена */
 .chip.add::before {
-  content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; background: var(--line-strong);
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: var(--line-strong);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' rx='14' fill='none' stroke='%23000' stroke-width='2' stroke-dasharray='6 4'/%3E%3C/svg%3E") 0 0 / 100% 100%; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' rx='14' fill='none' stroke='%23000' stroke-width='2' stroke-dasharray='6 4'/%3E%3C/svg%3E") 0 0 / 100% 100%;
 }
 .chip.add:hover::before { background: var(--ink); }
@@ -537,7 +540,24 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 /* ---------- покрытие (вкладка «Прогресс») ---------- */
 #map.cov .leaflet-overlay-pane, #map.cov .leaflet-marker-pane, #map.cov .leaflet-shadow-pane,
 #map.cov .leaflet-zones-pane, #map.cov .leaflet-top-pane { display: none; }
-.app:has(#map.cov) .maptools { display: none; }
+.app:has(#map.cov) #maptools { display: none; }
+.cov-tools { display: none; }
+.app:has(#map.cov) .cov-tools { display: block; }
+/* на широком экране панель района справа: слои сдвигаются левее неё */
+/* на широком экране справа панель района: слои — слева, рядом с кнопками масштаба */
+@media (min-width: 861px) { .cov-tools { right: auto; left: 56px; } }
+.sw.walked { border-color: var(--ink); }
+.sw.sights { width: 10px; height: 10px; border: 1.5px solid var(--ink-muted); border-radius: 50%; margin: 0 3px; }
+.mt-legend { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; margin-top: 2px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-muted); }
+.mt-legend .lg { display: flex; align-items: center; gap: 7px; white-space: normal; max-width: 210px; line-height: 15px; }
+.lg-mk { flex: none; width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; margin: 0 2px; }
+.lg-mk.st0 { border: 1px solid var(--line-strong); background: var(--surface); opacity: .6; }
+.lg-mk.st1 { border: 1.5px solid var(--petrol); background: var(--surface); }
+.lg-mk.st2 { background: var(--carmine); }
+.lg-ln { flex: none; width: 16px; border-radius: 2px; }
+.lg-ln.off { border-top: 1px solid var(--ink-muted); opacity: .6; }
+.lg-ln.on { border-top: 2.5px solid var(--ink); }
+.lg-fill { flex: none; width: 16px; height: 10px; border-radius: 2px; border: 1px solid var(--carmine); background: linear-gradient(90deg, color-mix(in srgb, var(--carmine) 8%, transparent), color-mix(in srgb, var(--carmine) 62%, transparent)); }
 .leaflet-pane path.cov-mask { fill: var(--paper); fill-opacity: .9; stroke: none; }
 .leaflet-pane path.cov-mute { fill: var(--paper); fill-opacity: .72; stroke: none; }
 .leaflet-pane path.cov-mkad { fill: none; stroke: var(--ink); stroke-width: 1.6; opacity: .7; }
@@ -558,6 +578,23 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 
 .ccards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .ccard { background: var(--surface-sunk); border-radius: var(--radius-md); padding: 10px 12px; font-size: 12px; line-height: 16px; }
+button.ccard { all: unset; box-sizing: border-box; background: var(--surface-sunk); border-radius: var(--radius-md); padding: 10px 12px; font-size: 12px; line-height: 16px; cursor: pointer; position: relative; transition: background .15s; }
+button.ccard:hover { background: color-mix(in srgb, var(--surface-sunk) 80%, var(--ink) 6%); }
+button.ccard:focus-visible { outline: 2px solid var(--focus); }
+button.ccard::after { content: ""; position: absolute; top: 14px; right: 12px; width: 6px; height: 6px; border-right: 1.5px solid var(--ink-muted); border-bottom: 1.5px solid var(--ink-muted); transform: rotate(45deg); transition: transform .2s; }
+button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17px; }
+.ccats { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; animation: pd-in .2s ease-out; margin: 0; }
+.ccat { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; grid-template-areas: "i n v" "b b b" ". s s"; gap: 2px 6px; align-items: center;
+  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); font-size: 12.5px; line-height: 16px; cursor: pointer; }
+.ccat:hover { border-color: var(--line-strong); background: var(--surface-sunk); }
+.ccat:focus-visible { outline: 2px solid var(--focus); }
+.ccat .ic { grid-area: i; } .ccat .ic svg { display: block; width: 16px; height: 16px; fill: none; stroke: var(--ink-muted); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.ccat .cn { grid-area: n; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ccat .cv { grid-area: v; font-variant-numeric: tabular-nums; color: var(--ink-muted); }
+.ccat .cs { grid-area: s; font-size: 11px; color: var(--carmine); }
+.ccat .cs:empty { display: none; }
+.ccat .cb { grid-area: b; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 3px; }
+.ccat .cb span { display: block; height: 100%; background: var(--petrol); }
 .ccard .cbig { font: 600 22px/28px var(--font-display); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--ink); }
 .covctl { display: flex; flex-direction: column; gap: var(--space-2); }
 .legend10 { display: flex; align-items: center; gap: var(--space-2); font-size: 12px; }
@@ -591,7 +628,7 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .lv5 { --lv: .18; } .lv6 { --lv: .21; } .lv7 { --lv: .24; } .lv8 { --lv: .28; } .lv9 { --lv: .32; }
 
 .dpanel {
-  position: absolute; top: 12px; right: 12px; bottom: 12px; z-index: 550; width: min(360px, calc(100% - 24px)); overflow-y: auto;
+  position: absolute; top: 12px; right: 12px; bottom: 12px; z-index: 550; width: min(360px, calc(100% - 24px)); overflow-y: auto; scrollbar-gutter: stable;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-float);
   padding: var(--space-3) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2);
 }
@@ -618,27 +655,34 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
   background: var(--surface); border: 1px solid var(--line); color: var(--ink-muted); opacity: .92;
   box-shadow: 0 1px 2px rgb(0 0 0 / .15); transition: transform .15s, background .15s, color .15s; }
 .mk-place svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+/* не исследованное место почти не видно: меньше, бледнее, без тени — до наведения */
+.mk-place.st0 { transform: scale(.82); opacity: .8; box-shadow: none; border-color: var(--line-strong); color: var(--ink-muted); }
 .mk-place.st1 { color: var(--petrol); border-color: color-mix(in srgb, var(--petrol) 40%, var(--line)); }
-.mk-place.st2 { color: var(--carmine); border-color: color-mix(in srgb, var(--carmine) 40%, var(--line)); }
+.mk-place.st2 { background: var(--carmine); border-color: var(--carmine); color: #fff; opacity: 1; }
 .mk-place.via { background: var(--petrol); border-color: var(--petrol); color: var(--surface); opacity: 1; }
 .mk-place.on, .mk-place:hover { background: var(--carmine); border-color: var(--carmine); color: #fff; opacity: 1; transform: scale(1.25); }
+.mk-place.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--carmine) 30%, transparent); }
 
 /* карточка места: фото с автором и лицензией, описание из Википедии */
 .place-pop .leaflet-popup-content { margin: 10px 12px; }
 .pop.place { max-width: 256px; }
 .pop .photo { margin: -2px 0 2px; }
-.pop .photo img { display: block; width: 100%; max-height: 170px; object-fit: cover; border-radius: 6px; background: var(--surface-sunk); }
+.pop .photo img { display: block; width: 100%; height: min(150px, 20vh); object-fit: cover; border-radius: 6px; background: var(--surface-sunk); }
 .pop .photo figcaption, .sight small { font-size: 10.5px; line-height: 14px; color: var(--ink-muted); overflow-wrap: anywhere; }
 .pop .photo figcaption a, .sight small a { color: inherit; }
-.pop .desc { margin: 0; font-size: 12.5px; line-height: 17px; max-height: 136px; overflow-y: auto; }
+.pop .desc { margin: 0; font-size: 12.5px; line-height: 17px; max-height: min(136px, 20vh); overflow-y: auto; }
 .dp-sub { margin: var(--space-3) 0 0; font: 600 14px/20px var(--font-display); }
-.sights { display: flex; flex-direction: column; gap: var(--space-3); }
-.sight { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--space-2); align-items: start; }
-.sight img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; background: var(--surface-sunk); }
-.sight .sight-ic { width: 64px; height: 64px; border-radius: 6px; background: var(--surface-sunk); display: grid; place-items: center; }
-.sight .sight-ic svg { width: 26px; height: 26px; fill: none; stroke: var(--ink-muted); stroke-width: 1.2; }
-.sight p { margin: 2px 0; font-size: 12.5px; line-height: 17px; }
-.sight .pname { font-weight: 600; }
+.sights { display: flex; flex-direction: column; gap: var(--space-4); }
+.sight { display: flex; flex-direction: column; gap: 4px; }
+.sight-top { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 10px; align-items: end; margin-bottom: 2px; }
+.sight img, .sight .sight-ic { width: 148px; height: 104px; object-fit: cover; border-radius: 8px; background: var(--surface-sunk); }
+.sight .sight-ic { display: grid; place-items: center; }
+.sight .sight-ic svg { width: 30px; height: 30px; fill: none; stroke: var(--ink-muted); stroke-width: 1.2; }
+.sight-src { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; line-height: 15px; color: var(--ink-muted); overflow-wrap: anywhere; }
+.sight-src a { color: inherit; }
+.sight-src > a:first-child { color: var(--ink); font-size: 12.5px; }
+.sight p { margin: 0; font-size: 13px; line-height: 19px; }
+.sight .pname { font-weight: 600; font-size: 14px; }
 .pname { all: unset; cursor: pointer; font-size: 13px; line-height: 18px; min-width: 0; }
 .pname:hover { text-decoration: underline; text-underline-offset: 3px; }
 .pname:focus-visible { outline: 2px solid var(--focus); }
@@ -662,10 +706,32 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .facts dt { color: var(--ink-muted); }
 .facts dd { margin: 0; overflow-wrap: anywhere; }
 .about-place .site { font-size: 12.5px; }
-#placeDist { width: 100%; }
 .pop .btns { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* лицензии в настройках */
 .licenses { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 18px; color: var(--ink-muted); }
 .licenses strong { color: var(--ink); font-weight: 500; }
 .licenses a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* точный градус направления */
+.slider .deg { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-muted); justify-self: end; }
+.slider .deg input { width: 52px; height: 26px; box-sizing: border-box; padding: 0 6px; text-align: right; font: inherit; font-size: 13px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; -moz-appearance: textfield; }
+.slider .deg input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.slider .deg input:focus { outline: none; border-color: var(--focus); }
+.slider .ends span:nth-child(n+2):not(:last-child) { text-align: center; }
+
+/* дистанция взведена на удаление: красная пилюля с крестиком, полоса снизу убывает за 3 с */
+#kmChips .chip.arm { position: relative; overflow: hidden; background: var(--carmine-tint); border-color: var(--carmine); color: var(--carmine-strong);
+  animation: km-shake .3s ease-in-out; }
+#kmChips .chip.arm::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--carmine);
+  transform-origin: left; animation: km-arm 3s linear forwards; }
+#kmChips .chip.arm .arm-row { display: inline-flex; align-items: center; gap: 2px; margin-left: -4px; }
+#kmChips .chip.arm .x { font-weight: 700; }
+@keyframes km-arm { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes km-shake { 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+
+/* выпадающие списки раскрываются плавно, от поля вниз */
+.sug:not([hidden]) { animation: sug-in .16s cubic-bezier(.2, .7, .3, 1); transform-origin: top center; }
+@keyframes sug-in { from { opacity: 0; transform: translateY(-4px) scaleY(.96); } }
+@media (prefers-reduced-motion: reduce) { .sug:not([hidden]) { animation: none; } }
