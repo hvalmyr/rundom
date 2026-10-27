@@ -22,7 +22,9 @@ export function notablePlace(pois) {
 
 /* Мемориалы в OSM часто названы в дательном падеже («В. И. Ленину»): добавляем «Памятник». */
 export function placeName(p) {
-  if (p.cat === 'history' && !/памятник|мемориал|монумент|обелиск/i.test(p.name) && /[а-яё]у$|[а-яё]ым$|[а-яё]ам$/i.test(p.name.split(' ').pop())) {
+  const words = p.name.split(' '), dative = (w) => /[а-яё]у$|[а-яё]ым$|[а-яё]ам$/i.test(w);
+  if ((p.cat === 'history' || p.cat === 'monument') && !/памятн|мемориал|монумент|обелиск|стела|бюст|камень|скульптур|знак/i.test(p.name) &&
+    (dative(words[words.length - 1]) || dative(words[0]))) {
     return 'Памятник ' + p.name;
   }
   return p.name;

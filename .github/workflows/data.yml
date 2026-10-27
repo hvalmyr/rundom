@@ -1,0 +1,55 @@
+name: Data from OpenStreetMap
+
+# Раз в месяц: свежая выгрузка Москвы → районы, улицы, объекты → релиз data-YYYY-MM → деплой сайта.
+on:
+  schedule:
+    - cron: '0 3 2 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Download OSM extract
+        run: curl -fsSL --retry 3 --retry-delay 30 -o moscow.osm.pbf https://download.bbbike.org/osm/bbbike/Moscow/Moscow.osm.pbf
+      - name: Previous release stats
+        run: gh release download --pattern stats.json --dir prev || echo "no previous data release"
+      - name: Build
+        run: node --max-old-space-size=6144 scripts/data/build.mjs moscow.osm.pbf public/data
+      - run: npm test
+      - name: Check
+        run: node scripts/data/check.mjs public/data/stats.json prev/stats.json | tee report.md; exit ${PIPESTATUS[0]}
+        shell: bash
+      - name: Publish release and deploy
+        run: |
+          tag="data-$(date -u +%Y-%m)"
+          tar czf data.tar.gz -C public/data .
+          gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
+          printf '\n[Сборка](%s)\n' "$RUN_URL" >> report.md
+          gh release create "$tag" data.tar.gz public/data/stats.json --latest \
+            --title "Данные OSM от $(jq -r .date public/data/stats.json)" --notes-file report.md
+          gh workflow run deploy.yml --ref main
+      - name: Report failure
+        if: failure()
+        run: |
+          { echo "Ежемесячная сборка данных не прошла, сайт остался на прошлом релизе."; echo; \
+            [ -f report.md ] && cat report.md; echo; echo "Журнал: $RUN_URL"; } > issue.md
+          gh issue create --title "Данные OSM: сборка $(date -u +%Y-%m-%d) не прошла" --body-file issue.md

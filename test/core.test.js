@@ -168,3 +168,54 @@ test('rope edit: the re-fitted ring goes through the pulled point and stays clos
   assert.ok(next.similar > 0.3, 'similar ' + next.similar);
   assert.ok(Math.abs(next.length - 4000) / 4000 <= 0.35);
 });
+
+/* Синтетический файл района: две улицы по 200 м, объект и парк. */
+function districtFile() {
+  const o = [5575000, 3760000], Q = 1e5;
+  const line = (a, b, c, d) => [Math.round(a * Q) - o[0], Math.round(b * Q) - o[1], Math.round((c - a) * Q), Math.round((d - b) * Q)];
+  return {
+    id: 1, n: 'Тест', v: 7, o,
+    s: [
+      { n: 'Широкая', t: 35, c: [line(55.751, 37.601, 55.751, 37.6042)] }, /* ≈200 м на восток */
+      { c: [line(55.753, 37.601, 55.753, 37.6042)] }
+    ],
+    ob: [{ n: 'Памятник', c: 'monument', p: [Math.round(55.7512 * Q) - o[0], Math.round(37.6025 * Q) - o[1]], s: 'Широкая' }],
+    pk: [{ n: 'Сквер', ha: 2, r: [[Math.round(55.7525 * Q) - o[0], Math.round(37.6015 * Q) - o[1], 100, 0, 0, 200, -100, 0, 0, -200]] }]
+  };
+}
+
+test('coverage: segments count when the track runs within the street tolerance', () => {
+  const dist = Core.decodeDistrict(districtFile());
+  assert.equal(dist.streets.length, 2);
+  assert.ok(Math.abs(dist.total - 400) < 10, 'total ' + dist.total);
+  assert.equal(dist.segLen.length, 16, '25 m segments');
+  /* по дальнему тротуару в 30 м от оси: широкая улица засчитана, безымянная — нет */
+  const track = [[[55.75127, 37.6008], [55.75127, 37.6044]]];
+  const r = Core.coverTrack(dist, track);
+  const st = Core.districtStats(dist, r.segs);
+  assert.ok(st.byStreet[0] > 190, 'wide street ' + st.byStreet[0]);
+  assert.equal(st.byStreet[1], 0);
+  assert.deepEqual(r.objs, [0]);
+  assert.deepEqual(r.parks, []);
+  /* вдвое дальше допуска — ничего */
+  assert.equal(Core.coverTrack(dist, [[[55.7518, 37.6008], [55.7518, 37.6044]]]).segs.length, 0);
+  /* половина улицы: засчитана только пройденная часть */
+  const half = Core.coverTrack(dist, [[[55.753, 37.601], [55.753, 37.6026]]]);
+  const hs = Core.districtStats(dist, half.segs);
+  assert.ok(hs.byStreet[1] > 80 && hs.byStreet[1] < 120, 'half ' + hs.byStreet[1]);
+  /* по своей улице, но дальше 40 м от памятника: он был виден */
+  const east = Core.coverTrack(dist, [[[55.75127, 37.6033], [55.75127, 37.6042]]]);
+  assert.deepEqual(east.objs, [0]);
+  assert.deepEqual(Core.coverTrack(dist, [[[55.753, 37.601], [55.753, 37.6042]]]).objs, [], 'other street, 200 m away');
+  /* через парк */
+  assert.deepEqual(Core.coverTrack(dist, [[[55.7524, 37.6020], [55.7528, 37.6022]]]).parks, [0]);
+  const idx = { d: [{ id: 1, b: [55.75, 37.6, 55.754, 37.605] }, { id: 2, b: [55.8, 37.6, 55.81, 37.61] }] };
+  assert.deepEqual(Core.districtsTouched(idx, track), [1]);
+});
+
+test('monument names in the dative get «Памятник»', () => {
+  assert.equal(Core.placeName({ name: 'Юрию Долгорукому', cat: 'monument' }), 'Памятник Юрию Долгорукому');
+  assert.equal(Core.placeName({ name: 'Жертвам теракта 08.08.2000', cat: 'monument' }), 'Памятник Жертвам теракта 08.08.2000');
+  assert.equal(Core.placeName({ name: 'Памятный камень на месте баррикады', cat: 'monument' }), 'Памятный камень на месте баррикады');
+  assert.equal(Core.placeName({ name: 'Церковь Николая в Хамовниках', cat: 'worship' }), 'Церковь Николая в Хамовниках');
+});

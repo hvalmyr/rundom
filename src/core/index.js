@@ -6,4 +6,5 @@ export * from './blocks.js';
 export * from './generator.js';
 export * from './track.js';
 export * from './coverage.js';
+export * from './cover.js';
 export * from './naming.js';

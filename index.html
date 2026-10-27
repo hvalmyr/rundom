@@ -200,6 +200,7 @@
         <button class="btn" id="drawBtn" type="button">Отметить вручную</button>
         <input class="hidden-input" id="gpxFiles" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple tabindex="-1">
       </div>
+      <p class="hint" id="covStatus" role="status" hidden></p>
       <div class="summary" id="importSummary" hidden></div>
       <h2 class="sec">Избранные маршруты</h2>
       <div class="list" id="favList"></div>
@@ -261,6 +262,7 @@
     <div class="field">
       <span class="lbl">Как строятся маршруты</span>
       <p class="hint">Всё считается в браузере: граф улиц OpenStreetMap и поиск пути A*. Закрытые ворота, частные и служебные проезды в граф не попадают. Данные карты © участники OpenStreetMap.</p>
+      <p class="hint" id="dataDate">Данные OpenStreetMap для покрытия улиц загружаются…</p>
     </div>
   </form>
 </dialog>

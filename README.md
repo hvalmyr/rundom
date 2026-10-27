@@ -20,8 +20,12 @@ npm run build
 - `src/storage/` — хранение на устройстве.
 - `src/data/` — запросы к Overpass и границы районов (`districts.json`).
 - `scripts/build-districts.mjs` — пересборка границ районов из OSM: `npm run data:districts`.
+- `scripts/data/` — данные покрытия улиц внутри МКАД. Сборка из выгрузки OSM:
+  `npm run data:build -- Moscow.osm.pbf`. Можно вместо сборки скачать последний релиз: `npm run data:fetch`
+  (нужен `gh`). Данные кладутся в `public/data/` и в git не попадают.
 - `src/styles/tokens.css` — токены дизайн-системы rundom (две нити: петроль и кармин).
 - `docs/SPEC.md` — техническое задание и этапы.
 - `legacy/` — исходный прототип.
 
 Деплой: GitHub Actions публикует `dist/` на GitHub Pages при каждом push в `main`.
+Данные покрытия обновляет ежемесячный workflow `data.yml`: он выпускает релиз `data-YYYY-MM` и запускает деплой.

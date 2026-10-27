@@ -15,6 +15,7 @@ import { initBlocks } from './ui/blocks.js';
 import { initDirection } from './ui/direction.js';
 import { initRope } from './ui/rope.js';
 import { initLibraryPanel } from './ui/library-panel.js';
+import { initCoverage } from './ui/coverage.js';
 import { initProgressPanel } from './ui/progress-panel.js';
 import { initSettings } from './ui/settings.js';
 
@@ -79,6 +80,7 @@ initBlocks(app);
 initDirection(app);
 initRoutePanel(app);
 initRope(app);
+initCoverage(app);
 initLibraryPanel(app);
 initProgressPanel(app);
 initSettings(app);

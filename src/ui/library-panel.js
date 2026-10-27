@@ -101,25 +101,41 @@ export function initLibraryPanel(app) {
     };
     tracks.add(entry);
     render();
+    app.coverage.ensure(entry).catch(() => {});
     return entry;
   }
   app.addTrack = addTrack;
   app.renderLibrary = render;
 
+  const CAT = { park: 'парк', view: 'смотровая', worship: 'храм', monument: 'памятник', museum: 'музей', sight: 'достопримечательность', history: 'история', heritage: 'наследие' };
   function showSummary(added, failed) {
     const box = $('#importSummary');
     box.innerHTML = '';
     if (!added.length) { box.hidden = true; return; }
     const total = added.reduce((s, t) => s + t.km, 0), fresh = added.reduce((s, t) => s + t.newKm, 0);
+    const mkad = el('div', null, el('div', { class: 'big own' }, '…'), el('div', { class: 'muted' }, 'улиц МКАД'));
+    const met = el('div', { class: 'met' });
     box.append(
       el('div', { class: 'head' },
         el('span', { class: 'lbl' }, added.length === 1 ? 'Трек загружен' : 'Загружено треков: ' + added.length),
         el('button', { class: 'btn small ghost', type: 'button', onclick: () => { box.hidden = true; } }, 'Скрыть')),
       el('div', { class: 'figs' },
         el('div', null, el('div', { class: 'big' }, fmtKm(total) + ' км'), el('div', { class: 'muted' }, 'всего')),
-        el('div', null, el('div', { class: 'big own' }, '+' + fmtKm(fresh) + ' км'), el('div', { class: 'muted' }, 'новых улиц'))),
+        el('div', null, el('div', { class: 'big own' }, '+' + fmtKm(fresh) + ' км'), el('div', { class: 'muted' }, 'новых улиц')),
+        mkad),
+      met,
       el('div', { class: 'files' }, added.map((t) => t.name).join('; ') + (failed ? '. Без трека: ' + failed : '')));
     box.hidden = false;
+    app.coverage.summary(added).then((r) => {
+      if (!r) { mkad.remove(); return; }
+      const pct = r.gainShare * 100;
+      mkad.firstChild.textContent = '+' + (pct > 0 && pct < 0.01 ? '<0,01' : pct.toLocaleString('ru-RU', { maximumFractionDigits: 2 })) + '%';
+      if (!r.met.length) return;
+      met.append(el('div', { class: 'muted' }, 'Встретились по пути'),
+        el('ul', null, r.met.slice(0, 12).map((m) => el('li', { class: m.isNew ? 'new' : '' },
+          Core.placeName({ name: m.n, cat: m.c }), el('small', null, (CAT[m.c] || '') + (m.isNew ? ' · впервые' : ''))))),
+        ...(r.met.length > 12 ? [el('div', { class: 'muted' }, 'и ещё ' + (r.met.length - 12))] : []));
+    }).catch(() => mkad.remove());
   }
 
   $('#importGpx').addEventListener('click', () => $('#gpxFiles').click());

@@ -206,6 +206,10 @@ details.more[open] summary::after { content: "−"; }
 .summary .big.own { color: var(--petrol); }
 .summary .files { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 .summary .head { display: flex; justify-content: space-between; align-items: center; }
+.summary .met ul { list-style: none; margin: var(--space-1) 0 0; padding: 0; display: grid; gap: var(--space-1); }
+.summary .met li { position: relative; padding-left: 14px; font-size: 13px; line-height: 18px; }
+.summary .met li small { display: block; color: var(--ink-muted); font-size: 12px; line-height: 16px; }
+.summary .met li.new::before { content: ''; position: absolute; left: 2px; top: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--petrol); }
 
 /* ---------- списки ---------- */
 .item .rename { all: unset; cursor: text; font-weight: 500; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }

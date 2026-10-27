@@ -73,6 +73,7 @@ export function initSettings(app) {
       for (const k of PLACES) if (d[k] !== undefined) store[k] = d[k];
       save();
       app.renderLibrary(); app.renderHome(); app.renderBlocks();
+      app.coverage.refreshAll();
       toast('Копия загружена: треков ' + nT + ', маршрутов ' + nF + '.');
     } catch (err) { toast('Это не копия rundom.'); }
     e.target.value = '';
