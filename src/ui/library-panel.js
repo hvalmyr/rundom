@@ -2,7 +2,7 @@
 import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { cssVar, divIcon } from '../map/map.js';
-import { $, el, fmtKm, uid, round5, toast, download } from './dom.js';
+import { $, el, fmtKm, uid, round5, toast, renameable } from './dom.js';
 
 const KIND = { gpx: 'GPX', route: 'маршрут', manual: 'вручную' };
 const fmtDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
@@ -17,29 +17,7 @@ export function initLibraryPanel(app) {
     if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
   }
 
-  /* Имя-кнопка: по нажатию превращается в поле, Enter или уход фокуса сохраняет, Esc отменяет. */
-  function renameable(entry, coll) {
-    const btn = el('button', { class: 'rename', type: 'button', title: 'Переименовать' }, entry.name);
-    btn.addEventListener('click', () => {
-      const input = el('input', { class: 'edit', type: 'text', value: entry.name, 'aria-label': 'Новое название' });
-      let done = false;
-      const finish = (keep) => {
-        if (done) return;
-        done = true;
-        const v = input.value.trim();
-        if (keep && v && v !== entry.name) { entry.name = v; entry.autoName = false; coll.update(entry); }
-        render();
-      };
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
-      });
-      input.addEventListener('blur', () => finish(true));
-      btn.replaceWith(input);
-      input.focus(); input.select();
-    });
-    return btn;
-  }
+  const renameIn = (entry, coll) => renameable(entry.name, (v) => { entry.name = v; entry.autoName = false; coll.update(entry); });
 
   function renderFavorites() {
     const list = $('#favList');
@@ -47,9 +25,9 @@ export function initLibraryPanel(app) {
     for (const f of favorites.items.slice().reverse()) {
       list.appendChild(el('div', { class: 'item' },
         el('div', { class: 'grow' },
-          renameable(f, favorites),
+          renameIn(f, favorites),
           el('div', { class: 'meta' }, fmtKm(f.length) + ' км · ' + Math.round((f.newShare || 0) * 100) + '% новых · ' + fmtDate(f.created))),
-        el('button', { class: 'btn small', type: 'button', onclick: () => { app.showLine(f.coords); app.sheet.peek(); } }, 'Показать'),
+        el('button', { class: 'btn small', type: 'button', onclick: () => { app.showLine(f); app.sheet.peek(); } }, 'Показать'),
         el('button', { class: 'btn small', type: 'button', onclick: () => app.downloadRoute(f.name, f.coords, f.length, f.loop) }, 'GPX'),
         el('button', {
           class: 'btn small ghost', type: 'button', 'aria-label': 'Удалить ' + f.name,
@@ -74,7 +52,7 @@ export function initLibraryPanel(app) {
       if (t.newKm !== undefined) meta.push(fmtKm(t.newKm) + ' км новых');
       meta.push(KIND[t.kind] || '');
       list.appendChild(el('div', { class: 'item' },
-        el('div', { class: 'grow' }, renameable(t, tracks), el('div', { class: 'meta' }, meta.join(' · '))),
+        el('div', { class: 'grow' }, renameIn(t, tracks), el('div', { class: 'meta' }, meta.join(' · '))),
         el('button', { class: 'btn small', type: 'button', onclick: () => { fitLines(t.lines); app.sheet.peek(); } }, 'Показать'),
         el('button', {
           class: 'btn small ghost', type: 'button', 'aria-label': 'Удалить ' + t.name,

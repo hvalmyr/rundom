@@ -67,7 +67,7 @@ function makeRouter(g) {
     if (src === dst) return { nodes: [src], edges: [], cost: 0 };
     cur++;
     hs = 0;
-    var X = g.X, Y = g.Y, dx0 = X[dst], dy0 = Y[dst];
+    var X = g.X, Y = g.Y, dx0 = X[dst], dy0 = Y[dst], bl = g.eBlock;
     gs[src] = 0; stamp[src] = cur; prevE[src] = -1;
     var h0 = Math.sqrt((X[src] - dx0) * (X[src] - dx0) + (Y[src] - dy0) * (Y[src] - dy0)) * 0.995;
     push(src, h0);
@@ -80,6 +80,7 @@ function makeRouter(g) {
       var gv = gs[v];
       for (var k = g.adjStart[v]; k < g.adjStart[v + 1]; k++) {
         var e = g.adjEdge[k];
+        if (bl && bl[e]) continue;
         var w = g.eF[e] === v ? g.eT[e] : g.eF[e];
         if (done[w] === cur) continue;
         var c = cost[e];

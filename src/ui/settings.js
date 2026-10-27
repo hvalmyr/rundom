@@ -9,11 +9,19 @@ const LEGEND = [
   ['<path d="M2 10H38" style="stroke:var(--map-explored);stroke-width:2.5;stroke-linecap:round"/>', 'Пройденные улицы'],
   ['<circle cx="20" cy="10" r="7" style="fill:var(--paper);stroke:var(--petrol);stroke-width:3.5"/>', 'Старт'],
   ['<circle cx="20" cy="10" r="7" style="fill:var(--paper);stroke:var(--carmine);stroke-width:3.5"/>', 'Финиш'],
+  ['<circle cx="12" cy="10" r="8" style="fill:var(--petrol)"/><circle cx="12" cy="10" r="3" style="fill:var(--paper)"/><circle cx="31" cy="10" r="4" style="fill:var(--paper);stroke:var(--petrol);stroke-width:2"/>', 'Дом и выходы из него'],
+  ['<path d="M3 10H37" style="stroke:var(--carmine);stroke-width:3.5;stroke-dasharray:.1 7;stroke-linecap:round"/>', 'Подводка: от выхода до кольца и обратно'],
+  ['<circle cx="20" cy="10" r="7" style="fill:var(--surface);stroke:var(--carmine);stroke-width:2"/><path d="M17 7l6 6M23 7l-6 6" style="stroke:var(--carmine);stroke-width:2;stroke-linecap:round"/>', 'Калитка, закрытая вами'],
+  ['<path d="M6 10H34" style="stroke:var(--carmine);stroke-width:2.5"/><path d="M6 3V17M34 3V17" style="stroke:var(--carmine);stroke-width:3;stroke-linecap:round"/>', 'Закрытый вами отрезок'],
+  ['<rect x="4" y="3" width="32" height="14" style="fill:url(#rd-hatch);stroke:var(--carmine);stroke-width:1.6;stroke-dasharray:5 3"/>', 'Запретная зона (серый пунктир — выключена)'],
   ['<circle cx="20" cy="10" r="10" style="fill:var(--surface);stroke:var(--carmine);stroke-width:2"/><text x="20" y="14" text-anchor="middle" style="font:600 10px var(--font-sans);fill:var(--ink)">5</text>', 'Километровые метки'],
   ['<path d="M2 10H38" style="stroke:var(--map-gate-osm);stroke-width:2;stroke-dasharray:4 5"/>', 'Пути, закрытые для пешехода (OSM)'],
   ['<path d="M2 10H38" style="stroke:var(--map-street);stroke-width:5"/><rect x="18" y="3" width="4" height="14" rx="1" style="fill:var(--map-gate-osm)"/>', 'Закрытые ворота (OSM)'],
   ['<circle cx="13" cy="10" r="5" style="fill:var(--surface);stroke:var(--petrol);stroke-width:2.5"/><circle cx="29" cy="10" r="5" style="fill:var(--carmine)"/>', 'Место / маршрут пройдёт через него']
 ];
+
+/* дом, выходы, закрытия и зоны: тоже в копии (версия 3) */
+const PLACES = ['home', 'exits', 'ringStart', 'blocks', 'zones', 'openGates'];
 
 export function initSettings(app) {
   const dlg = $('#settings');
@@ -46,7 +54,8 @@ export function initSettings(app) {
 
   $('#exportData').addEventListener('click', () => {
     download('rundom-kopiya.json', JSON.stringify({
-      app: BACKUP_APP, version: 2, prefs: store.prefs, tracks: app.tracks.items, favorites: app.favorites.items
+      app: BACKUP_APP, version: 3, prefs: store.prefs, tracks: app.tracks.items, favorites: app.favorites.items,
+      ...Object.fromEntries(PLACES.map((k) => [k, store[k]]))
     }), 'application/json');
   });
   $('#importData').addEventListener('click', () => $('#dataFile').click());
@@ -61,8 +70,9 @@ export function initSettings(app) {
       const nT = await app.tracks.merge(tracks);
       const nF = await app.favorites.merge((d.favorites || []).filter((x) => x && Array.isArray(x.coords)));
       if (d.prefs) Object.assign(store.prefs, d.prefs);
+      for (const k of PLACES) if (d[k] !== undefined) store[k] = d[k];
       save();
-      app.renderLibrary();
+      app.renderLibrary(); app.renderHome(); app.renderBlocks();
       toast('Копия загружена: треков ' + nT + ', маршрутов ' + nF + '.');
     } catch (err) { toast('Это не копия rundom.'); }
     e.target.value = '';

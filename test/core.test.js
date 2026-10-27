@@ -51,3 +51,64 @@ test('track and route titles describe the content', () => {
   assert.equal(Core.routeTitle({ pois: [{ name: 'В. И. Ленину', cat: 'history' }], streets: [] }, 'x'), 'Памятник В. И. Ленину');
   assert.equal(Core.routeTitle({ pois: [{ name: 'Ленину', cat: 'history' }, { name: 'Сквер Тургенева', cat: 'park' }], streets: [] }, 'x'), 'Сквер Тургенева');
 });
+
+test('closures and zones cut the graph, reach respects the limit', () => {
+  const g = Core.buildGraph(Core.parseNetwork(gridNetwork()), {});
+  const c = Core.nearestNode(g, 55.7585, 37.616, 200).node;
+  const n = Core.applyBlocks(g, { zones: [{ shape: 'circle', c: [g.lat[c], g.lon[c]], r: 150 }] });
+  assert.ok(n > 0);
+  assert.notEqual(g.comp[c], g.comp[Core.nearestNode(g, 55.75, 37.6, 50).node]);
+  Core.applyBlocks(g, { gates: [[g.lat[c], g.lon[c]]] });
+  assert.equal(g.compSize[g.comp[c]], 1);
+  Core.applyBlocks(g, {});
+  assert.equal(g.eBlock, null);
+  const reach = Core.reachWithin(g, c, 250);
+  for (const v of reach.nodes) assert.ok(reach.dist.get(v) <= 250);
+  assert.ok(reach.nodes.length >= 5);
+});
+
+test('both sides of a street are twins, the next block of it is not', () => {
+  const els = [];
+  for (let j = 0; j < 6; j++) {
+    els.push({ type: 'node', id: 1 + j, lat: 55.75, lon: 37.6 + j * 0.0016 });
+    els.push({ type: 'node', id: 101 + j, lat: 55.75009, lon: 37.6 + j * 0.0016 });
+  }
+  els.push({ type: 'way', id: 1, tags: { highway: 'footway' }, nodes: [1, 2, 3, 4, 5, 6] });
+  els.push({ type: 'way', id: 2, tags: { highway: 'footway' }, nodes: [101, 102, 103, 104, 105, 106] });
+  const g = Core.buildGraph(Core.parseNetwork({ elements: els }), {});
+  Core.ensureTwins(g);
+  const twins = (e) => [...g.twinEdge.slice(g.twinStart[e], g.twinStart[e + 1])];
+  assert.equal(twins(0).length, 1);
+  assert.ok(g.eF[twins(0)[0]] >= 6, 'twin lies on the other side');
+});
+
+test('route from home: approach within the limit, ring without repeats', () => {
+  const g = Core.buildGraph(Core.parseNetwork(gridNetwork()), {});
+  Core.applyContext(g, { parks: [], pois: [] });
+  const home = Core.nearestNode(g, 55.758, 37.616, 200, 10).node;
+  const gen = Core.createGenerator(g, {
+    A: home, B: home, length: 5000, tol: 0.1, count: 3, seed: 11, maxAttempts: 200,
+    exits: [home], approachMax: 300, noRepeat: true
+  });
+  while (!gen.run(50));
+  const res = gen.results();
+  assert.ok(res.routes.length > 0);
+  for (const r of res.routes) {
+    assert.ok(r.approach <= 300);
+    assert.ok(r.repeat <= 100, 'repeat ' + r.repeat);
+    const first = r.coords[0], last = r.coords[r.coords.length - 1];
+    assert.deepEqual(first, last, 'returns home');
+    if (r.approachCoords) assert.deepEqual(r.approachCoords[r.approachCoords.length - 1], r.ringCoords[0]);
+  }
+});
+
+test('a gate the user marked open stops blocking the path', () => {
+  const net = gridNetwork(4);
+  const gate = net.elements.find((e) => e.type === 'node' && e.id === 6);
+  gate.tags = { barrier: 'gate', access: 'private' };
+  const closed = Core.buildGraph(Core.parseNetwork(net), {});
+  const open = Core.buildGraph(Core.parseNetwork(net), { openGates: [{ lat: gate.lat, lon: gate.lon }] });
+  assert.equal(closed.closedGates.length, 1);
+  assert.equal(open.closedGates.length, 0);
+  assert.ok(open.E > closed.E);
+});

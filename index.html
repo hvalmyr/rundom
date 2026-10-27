@@ -31,36 +31,63 @@
     <!-- ===== Маршрут ===== -->
     <section class="tabpane" id="pane-route" role="tabpanel" aria-labelledby="tab-route">
       <div class="field">
-        <label class="lbl" for="qA">Старт</label>
-        <div class="row">
-          <input id="qA" type="search" placeholder="Адрес или 55.7558, 37.6173" autocomplete="off">
-          <button class="iconbtn" id="pickA" type="button" aria-pressed="false" title="Указать на карте" aria-label="Указать старт на карте">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
-          </button>
-          <button class="iconbtn" id="locA" type="button" title="Моё местоположение" aria-label="Взять моё местоположение">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8z"/></svg>
-          </button>
+        <span class="lbl" id="startLbl">Старт</span>
+        <div class="seg" id="startSeg" role="group" aria-labelledby="startLbl">
+          <button type="button" data-start="home">От дома</button><button type="button" data-start="point">Своя точка</button>
         </div>
-        <div class="coord" id="infoA">не задан</div>
-        <div class="sug" id="sugA" hidden></div>
       </div>
 
-      <label class="check"><input type="checkbox" id="loop"><span>Финиш там же<small>Без галочки можно задать отдельный финиш</small></span></label>
-
-      <div class="field" id="fieldB" hidden>
-        <label class="lbl" for="qB">Финиш</label>
-        <div class="row">
-          <input id="qB" type="search" placeholder="Адрес или координаты" autocomplete="off">
-          <button class="iconbtn" id="pickB" type="button" aria-pressed="false" title="Указать на карте" aria-label="Указать финиш на карте">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
-          </button>
+      <div class="homebox" id="homeBox">
+        <div class="homerow">
+          <span class="dot-house" aria-hidden="true"></span>
+          <span class="grow" id="homeInfo">Дом не отмечен</span>
+          <button class="btn small" id="homeEdit" type="button">Отметить</button>
         </div>
-        <div class="coord" id="infoB">не задан</div>
-        <div class="sug" id="sugB" hidden></div>
+        <div class="homerow">
+          <span class="dot-ring" aria-hidden="true"></span>
+          <span class="grow muted" id="ringInfo">Старт кольца выбирает генератор</span>
+          <button class="btn small ghost" id="ringClear" type="button" hidden>Сбросить</button>
+          <button class="btn small" id="ringPick" type="button">Указать</button>
+        </div>
+        <div class="slider">
+          <label for="approachMax">Подводка не длиннее</label><output id="outApproach"></output>
+          <input type="range" id="approachMax" min="0" max="1500" step="100">
+        </div>
+      </div>
+
+      <div class="pointbox" id="pointBox">
+        <div class="field">
+          <label class="lbl" for="qA">Точка старта</label>
+          <div class="row">
+            <input id="qA" type="search" placeholder="Адрес или 55.7558, 37.6173" autocomplete="off">
+            <button class="iconbtn" id="pickA" type="button" aria-pressed="false" title="Указать на карте" aria-label="Указать старт на карте">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+            </button>
+            <button class="iconbtn" id="locA" type="button" title="Моё местоположение" aria-label="Взять моё местоположение">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8z"/></svg>
+            </button>
+          </div>
+          <div class="coord" id="infoA">не задан</div>
+          <div class="sug" id="sugA" hidden></div>
+        </div>
+
+        <label class="check"><input type="checkbox" id="loop"><span>Финиш там же<small>Без галочки можно задать отдельный финиш</small></span></label>
+
+        <div class="field" id="fieldB" hidden>
+          <label class="lbl" for="qB">Финиш</label>
+          <div class="row">
+            <input id="qB" type="search" placeholder="Адрес или координаты" autocomplete="off">
+            <button class="iconbtn" id="pickB" type="button" aria-pressed="false" title="Указать на карте" aria-label="Указать финиш на карте">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+            </button>
+          </div>
+          <div class="coord" id="infoB">не задан</div>
+          <div class="sug" id="sugB" hidden></div>
+        </div>
       </div>
 
       <div class="field">
-        <span class="lbl" id="kmLbl">Дистанция, км</span>
+        <span class="lbl" id="kmLbl">Дистанция, км <small id="kmHint" class="muted">вместе с подводкой</small></span>
         <div class="chips" id="kmChips" role="group" aria-labelledby="kmLbl"></div>
         <div class="row">
           <span class="muted">Допуск</span>
@@ -95,6 +122,7 @@
             <label for="prefPoi">Интересные места рядом</label><output id="outPoi"></output>
             <input type="range" id="prefPoi" min="0" max="100" step="5">
           </div>
+          <label class="check"><input type="checkbox" id="allowRepeats"><span>Разрешить повторы улиц<small>Без галочки кольцо не проходит одну улицу дважды, считая обе её стороны</small></span></label>
           <label class="check"><input type="checkbox" id="avoidSteps"><span>Без лестниц</span></label>
           <label class="check"><input type="checkbox" id="strictGates"><span>Строго к шлагбаумам<small>Шлагбаумы с access=private считать закрытыми</small></span></label>
           <div class="row">
@@ -105,6 +133,18 @@
             <label class="muted" for="pace">темп</label>
             <input id="pace" class="num" type="text" inputmode="numeric" value="6:00" size="5"><span class="muted">/км</span>
           </div>
+        </div>
+      </details>
+
+      <details class="more" id="blocksBox">
+        <summary>Закрытия и зоны <span class="muted" id="blocksCount"></span></summary>
+        <div class="blocks">
+          <div class="chips">
+            <button class="btn small" id="addClosed" type="button">+ Закрыто</button>
+            <button class="btn small" id="addZone" type="button">+ Зона</button>
+            <button class="btn small" id="addCircle" type="button">+ Круг</button>
+          </div>
+          <div class="list" id="blocksList"></div>
         </div>
       </details>
 

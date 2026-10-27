@@ -3,6 +3,7 @@ import { hav, bearing, mulberry32 } from './geo.js';
 import { CLS } from './osm.js';
 import { poiNear } from './graph.js';
 import { buildCost, makeRouter } from './routing.js';
+import { ensureTwins, reachWithin } from './blocks.js';
 
 /* ---------- оценка маршрута ---------- */
 function analyzeRoute(g, nodes, edges, prefs) {
@@ -79,6 +80,9 @@ function scoreRoute(m, prefs, err, overlap) {
 }
 
 /* ---------- подбор маршрутов ---------- */
+/* o.exits — узлы выходов из дома: кольцо стартует в точке не дальше o.approachMax от выхода,
+   подводка бежится туда и обратно. o.ringStart — точка старта кольца, заданная вручную.
+   o.noRepeat — кольцо не проходит одну улицу (с её тротуарами) дважды. */
 function createGenerator(g, o) {
   var rng = mulberry32(o.seed || 1);
   var router = makeRouter(g);
@@ -90,8 +94,58 @@ function createGenerator(g, o) {
   var X = g.X, Y = g.Y;
   function dist(u, v) { var dx = X[u] - X[v], dy = Y[u] - Y[v]; return Math.sqrt(dx * dx + dy * dy); }
   var dAB = dist(A, B);
-  var loopish = dAB < 0.1 * L;
+  var home = !!(o.exits && o.exits.length);
+  var loopish = home || dAB < 0.1 * L;
   var ax = X[A], ay = Y[A], bx = X[B], by = Y[B];
+  var noRepeat = !!o.noRepeat;
+  if (noRepeat) ensureTwins(g);
+
+  /* старт кольца: выход + подводка; без дома — сама точка A */
+  var starts = null, fixed = null, cur = { d: 0, nodes: [A], edges: [] }, Lr = L;
+  if (home) {
+    if (o.ringStart !== undefined && o.ringStart !== null) {
+      var lenCost = new Float64Array(g.E);
+      for (var le = 0; le < g.E; le++) lenCost[le] = g.eLen[le];
+      o.exits.forEach(function (x) {
+        var r = router.route(lenCost, x, o.ringStart, null, 1);
+        if (!r) return;
+        var d = 0;
+        for (var i = 0; i < r.edges.length; i++) d += g.eLen[r.edges[i]];
+        if (!fixed || d < fixed.d) fixed = { node: o.ringStart, d: d, nodes: r.nodes, edges: r.edges };
+      });
+    } else {
+      starts = [];
+      var best = new Map();
+      o.exits.forEach(function (x) {
+        var reach = reachWithin(g, x, o.approachMax === undefined ? 1000 : o.approachMax);
+        reach.nodes.forEach(function (v) {
+          var d = reach.dist.get(v);
+          if (v !== x && g.deg[v] < 3) return;
+          var b0 = best.get(v);
+          if (!b0 || d < b0.d) best.set(v, { node: v, d: d, reach: reach });
+        });
+      });
+      best.forEach(function (st) { starts.push(st); });
+      starts.sort(function (p, q) { return p.d - q.d; });
+    }
+  }
+  function chooseStart() {
+    if (!home) return true;
+    var st = fixed;
+    if (!st && starts.length) {
+      /* чаще короткая подводка: желаемая длина — квадрат случайного числа от предела */
+      var want = starts[starts.length - 1].d * rng() * rng(), lo = 0, hi = starts.length - 1;
+      while (lo < hi) { var mid = (lo + hi) >> 1; if (starts[mid].d < want) lo = mid + 1; else hi = mid; }
+      st = starts[Math.min(starts.length - 1, lo + Math.floor(rng() * 4))];
+      if (!st.nodes) { var pth = st.reach.path(st.node); st.nodes = pth.nodes; st.edges = pth.edges; }
+    }
+    if (!st) return false;
+    Lr = L - 2 * st.d;
+    if (Lr < Math.min(1500, L * 0.4)) return false;
+    cur = st; A = B = st.node;
+    ax = bx = X[A]; ay = by = Y[A];
+    return true;
+  }
 
   var pool = [];
   for (var v = 0; v < g.n; v++) {
@@ -112,6 +166,7 @@ function createGenerator(g, o) {
   var accepted = [], fallback = [];
   var used = new Uint8Array(g.E), seen = new Uint8Array(g.E);
   var state = { done: pool.length < 5 && !forced.length, error: pool.length < 5 ? 'pool' : null };
+  if (home && !fixed && (!starts || !starts.length)) { state.done = true; state.error = 'exits'; }
 
   function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
   function pickVia() {
@@ -154,13 +209,19 @@ function createGenerator(g, o) {
     return s;
   }
 
+  /* ребро и, без повторов, параллельные ему рёбра той же улицы */
+  function mark(arr, e) {
+    arr[e] = 1;
+    if (noRepeat) for (var k = g.twinStart[e]; k < g.twinStart[e + 1]; k++) arr[g.twinEdge[k]] = 1;
+  }
+
   function buildRoute(seq) {
     used.fill(0);
     var nodes = [seq[0]], edges = [];
     for (var i = 1; i < seq.length; i++) {
-      var r = router.route(cost, seq[i - 1], seq[i], used, 6);
+      var r = router.route(cost, seq[i - 1], seq[i], used, noRepeat ? 40 : 6);
       if (!r) return null;
-      for (var j = 0; j < r.edges.length; j++) { used[r.edges[j]] = 1; edges.push(r.edges[j]); }
+      for (var j = 0; j < r.edges.length; j++) { mark(used, r.edges[j]); edges.push(r.edges[j]); }
       for (var q = 1; q < r.nodes.length; q++) nodes.push(r.nodes[q]);
     }
     return { nodes: nodes, edges: edges };
@@ -169,23 +230,36 @@ function createGenerator(g, o) {
   function consider(seq) {
     var r = buildRoute(seq);
     if (!r || !r.edges.length) return;
-    var total = 0, overlap = 0;
+    var ring = 0, overlap = 0;
     seen.fill(0);
     for (var i = 0; i < r.edges.length; i++) {
       var ed = r.edges[i];
-      total += g.eLen[ed];
-      if (seen[ed]) overlap += g.eLen[ed]; else seen[ed] = 1;
+      ring += g.eLen[ed];
+      if (seen[ed]) overlap += g.eLen[ed];
+      mark(seen, ed);
     }
     var eu = estimate(seq);
-    if (eu > 50) c = 0.7 * c + 0.3 * Math.max(1.05, Math.min(2, total / eu));
+    if (eu > 50) c = 0.7 * c + 0.3 * Math.max(1.05, Math.min(2, ring / eu));
+    var total = ring + 2 * cur.d;
     var err = Math.abs(total - L) / L;
-    var ov = total ? overlap / total : 0;
-    var cand = { nodes: r.nodes, edges: r.edges, length: total, err: err, overlap: ov, via: seq.slice(1, -1) };
+    var ov = ring ? overlap / ring : 0;
+    /* трек целиком: подводка, кольцо, подводка обратно */
+    var nodes = r.nodes, edges = r.edges;
+    if (cur.edges.length) {
+      var back = cur.nodes.slice().reverse();
+      nodes = cur.nodes.concat(r.nodes.slice(1), back.slice(1));
+      edges = cur.edges.concat(r.edges, cur.edges.slice().reverse());
+    }
+    var cand = {
+      nodes: nodes, edges: edges, length: total, err: err, overlap: ov, repeat: overlap, via: seq.slice(1, -1),
+      approach: cur.d, apN: cur.nodes.length, ringN: r.nodes.length
+    };
     var mask = new Uint8Array(g.E);
-    for (var k = 0; k < r.edges.length; k++) mask[r.edges[k]] = 1;
+    for (var k = 0; k < edges.length; k++) mask[edges[k]] = 1;
     cand.mask = mask;
-    if (err <= tol && ov <= 0.2) accepted.push(cand);
-    else if (err <= 0.35 && ov <= 0.3) fallback.push(cand);
+    var clean = noRepeat ? overlap <= Math.max(60, 0.015 * ring) : ov <= 0.2;
+    if (err <= tol && clean) accepted.push(cand);
+    else if (err <= 0.35 && ov <= (noRepeat ? 0.1 : 0.3)) fallback.push(cand);
   }
 
   function similarity(a, b) {
@@ -204,12 +278,13 @@ function createGenerator(g, o) {
       directTried = true;
       if (!forced.length && A !== B) { consider([A, B]); return; }
     }
+    if (!chooseStart()) { rejects++; return; }
     var seq = null, tries = 0;
     while (tries++ < 40) {
       var vias = makeVias();
       var s = [A].concat(vias, [B]);
       var est = estimate(s) * c;
-      if (est >= L * (1 - win) && est <= L * (1 + win)) { seq = s; break; }
+      if (est >= Lr * (1 - win) && est <= Lr * (1 + win)) { seq = s; break; }
       rejects++;
       if (rejects % 60 === 0 && win < 0.5) win += 0.05;
     }
@@ -232,7 +307,7 @@ function createGenerator(g, o) {
     var pool1 = accepted.slice();
     var approx = false;
     if (pool1.length < count) {
-      fallback.sort(function (a, b) { return a.err - b.err; });
+      fallback.sort(function (a, b) { return (a.err + a.overlap) - (b.err + b.overlap); });
       for (var i = 0; i < fallback.length && pool1.length < count * 3; i++) pool1.push(fallback[i]);
       approx = true;
     }
@@ -257,6 +332,9 @@ function createGenerator(g, o) {
     });
     picked.forEach(function (r) {
       r.coords = r.nodes.map(function (n) { return [g.lat[n], g.lon[n]]; });
+      /* подводка отдельно: рисуется пунктиром */
+      r.approachCoords = r.apN > 1 ? r.coords.slice(0, r.apN) : null;
+      r.ringCoords = r.apN > 1 ? r.coords.slice(r.apN - 1, r.apN - 1 + r.ringN) : r.coords;
       r.off = r.err > tol;
       delete r.mask;
     });

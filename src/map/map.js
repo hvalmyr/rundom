@@ -67,8 +67,17 @@ export function createMap() {
   }
   setTiles(store.tiles);
 
+  /* зоны и закрытые отрезки — SVG под линиями маршрута: штриховка и цвета из CSS */
+  map.createPane('zones');
+  map.getPane('zones').style.zIndex = 380;
+  const svg = L.svg({ pane: 'zones', padding: 0.3 });
+  map.addLayer(svg);
+  svg._container.insertAdjacentHTML('afterbegin',
+    '<defs><pattern id="rd-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
+    '<line x1="0" y1="0" x2="0" y2="7" style="stroke:var(--carmine);stroke-width:1.6;opacity:.5"/></pattern></defs>');
+
   const layers = {};
-  ['explored', 'closed', 'gates', 'osm', 'routes', 'draft', 'km', 'ab'].forEach((k) => { layers[k] = L.layerGroup().addTo(map); });
+  ['zones', 'explored', 'closed', 'gates', 'blocks', 'osm', 'routes', 'draft', 'km', 'home', 'ab'].forEach((k) => { layers[k] = L.layerGroup().addTo(map); });
 
   map.on('moveend', () => {
     const c = map.getCenter();
@@ -82,5 +91,5 @@ export function createMap() {
     if (!on && map.hasLayer(layer)) map.removeLayer(layer);
   }
 
-  return { map, layers, setTiles, toggleLayer };
+  return { map, layers, svg, setTiles, toggleLayer };
 }

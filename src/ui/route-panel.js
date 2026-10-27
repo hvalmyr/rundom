@@ -16,6 +16,7 @@ export function initRoutePanel(app) {
 
   function renderAB() {
     layers.ab.clearLayers();
+    if (store.prefs.startMode === 'home') return;
     for (const k of ['A', 'B']) {
       const p = store[k];
       const info = $('#info' + k);
@@ -164,7 +165,7 @@ export function initRoutePanel(app) {
     syncSeg($('#tolSeg'), 'tol', p.tol);
     $('#loop').checked = p.loop; $('#fieldB').hidden = p.loop;
     $('#prefMain').value = p.main; $('#prefAppeal').value = p.appeal; $('#prefNovelty').value = p.novelty; $('#prefPoi').value = p.poi;
-    $('#avoidSteps').checked = p.avoidSteps; $('#strictGates').checked = p.strictGates;
+    $('#avoidSteps').checked = p.avoidSteps; $('#allowRepeats').checked = p.allowRepeats; $('#strictGates').checked = p.strictGates;
     $('#kmStep').value = String(p.kmStep); $('#pace').value = p.pace;
     outputs();
   }
@@ -185,6 +186,7 @@ export function initRoutePanel(app) {
   bindPref('#prefNovelty', 'novelty', int);
   bindPref('#prefPoi', 'poi', int);
   bindPref('#avoidSteps', 'avoidSteps');
+  bindPref('#allowRepeats', 'allowRepeats');
   bindPref('#strictGates', 'strictGates');
   bindPref('#kmStep', 'kmStep', (t) => parseFloat(t.value));
   bindPref('#pace', 'pace');
@@ -254,21 +256,34 @@ export function initRoutePanel(app) {
     const gray = cssVar('map-gate-osm');
     for (const ln of g.closedWays) layers.closed.addLayer(L.polyline(ln, { color: gray, weight: 2, dashArray: '4 5', opacity: 0.9, interactive: false }));
     for (const c of g.closedGates) {
+      if (app.isReopened(c)) continue;
       const m = L.marker([c.lat, c.lon], { icon: divIcon('mk-gate', 6, 18), keyboard: false, title: 'Закрыто для пешехода' });
-      m.bindPopup('Закрытый проход: ' + c.barrier + (c.access ? ' (access=' + c.access + ')' : '') + (c.name ? ', ' + c.name : ''));
+      m.bindPopup(() => el('div', { class: 'pop' },
+        el('strong', null, 'Закрытый проход'),
+        el('div', { class: 'sub' }, c.barrier + (c.access ? ' (access=' + c.access + ')' : '') + (c.name ? ', ' + c.name : '') + ' · по данным OSM'),
+        el('button', { class: 'btn small', type: 'button', onclick: () => { app.reopenGate(c); map.closePopup(); } }, 'На самом деле открыто')));
       layers.gates.addLayer(m);
     }
   }
 
   async function generate() {
     if (S.busy) return;
-    const prefs = store.prefs, A = store.A;
-    if (!A) { say('Сначала задайте старт: введите адрес или нажмите на прицел.', 'warn'); return; }
-    const B = prefs.loop ? A : store.B;
-    if (!B) { say('Задайте финиш или отметьте «Финиш там же».', 'warn'); return; }
+    const prefs = store.prefs, fromHome = prefs.startMode === 'home';
+    const loop = fromHome || prefs.loop;
+    const ll = (p) => p && { lat: p[0], lon: p[1] };
+    let A, B;
+    if (fromHome) {
+      if (!store.home) { say('Отметьте дом: кнопка «Отметить» в разделе «Старт».', 'warn'); return; }
+      A = ll(store.home); B = ll(store.ringStart) || A;
+    } else {
+      A = store.A;
+      if (!A) { say('Сначала задайте старт: введите адрес или нажмите на прицел.', 'warn'); return; }
+      B = loop ? A : store.B;
+      if (!B) { say('Задайте финиш или отметьте «Финиш там же».', 'warn'); return; }
+    }
     const Lm = prefs.km * 1000;
     const d = Core.hav(A.lat, A.lon, B.lat, B.lon);
-    if (!prefs.loop && Lm < d * 1.02) { say('От старта до финиша по прямой уже ' + fmtKm(d) + ' км. Увеличьте дистанцию.', 'warn'); return; }
+    if (!loop && Lm < d * 1.02) { say('От старта до финиша по прямой уже ' + fmtKm(d) + ' км. Увеличьте дистанцию.', 'warn'); return; }
 
     const ac = new AbortController(); S.abort = ac;
     setBusy(true); say('Готовлюсь…');
@@ -289,24 +304,48 @@ export function initRoutePanel(app) {
         if (R >= 5000 && Lm / 2.5 > 5000) toast('Для такой длины зона ограничена радиусом 5 км. Маршруты могут получиться короче.');
       }
       braid(0.25);
-      const key = JSON.stringify([prefs.avoidSteps, prefs.strictGates]);
+      const key = JSON.stringify([prefs.avoidSteps, prefs.strictGates, store.openGates.map((o) => [o.lat, o.lon])]);
       if (!S.graph || S.graphKey !== key) {
         say('Строю граф улиц…'); await tick();
-        S.graph = Core.buildGraph(S.net.parsed, { avoidSteps: prefs.avoidSteps, strictGates: prefs.strictGates });
+        S.graph = Core.buildGraph(S.net.parsed, { avoidSteps: prefs.avoidSteps, strictGates: prefs.strictGates, openGates: store.openGates });
         S.graphKey = key; S.router = null;
       }
       const g = S.graph;
       say('Учитываю парки, места и пройденные улицы…'); await tick();
       Core.applyContext(g, contextForGraph());
       Core.applyExplored(g, app.tracks.items.flatMap((t) => t.lines));
+      const spec = app.blocksSpec();
+      const nBlocked = Core.applyBlocks(g, spec);
+      app.snapBlocks();
       renderClosed();
 
       const comp = 30;
-      const sA = Core.nearestNode(g, A.lat, A.lon, 400, comp);
-      const sB = Core.nearestNode(g, B.lat, B.lon, 400, comp);
-      if (!sA) throw new Error('Рядом со стартом нет проходимых улиц. Сдвиньте точку.');
-      if (!sB) throw new Error('Рядом с финишем нет проходимых улиц. Сдвиньте точку.');
-      if (g.comp[sA.node] !== g.comp[sB.node]) throw new Error('Между стартом и финишем нет пути без закрытых проходов. Включите слой «Закрытые проходы» и сдвиньте точки.');
+      let sA, sB, exits = null, ringNode = null, lostExits = 0;
+      if (fromHome) {
+        const sh = Core.nearestNode(g, A.lat, A.lon, 400, comp);
+        if (!sh) throw new Error('Рядом с домом нет проходимых улиц. Проверьте отметку дома и запретные зоны.');
+        exits = [];
+        for (const p of store.exits) {
+          const s = Core.nearestNode(g, p[0], p[1], 150, comp);
+          if (s) exits.push(s.node); else lostExits++;
+        }
+        if (!exits.length) exits.push(sh.node);
+        const main = g.comp[exits[0]];
+        lostExits += exits.filter((v) => g.comp[v] !== main).length;
+        exits = exits.filter((v) => g.comp[v] === main);
+        if (store.ringStart) {
+          const s = Core.nearestNode(g, B.lat, B.lon, 200, comp);
+          if (!s || g.comp[s.node] !== main) throw new Error('От дома до старта кольца нет пути без закрытий и зон. Сдвиньте старт кольца или выключите зону.');
+          ringNode = s.node;
+        }
+        sA = sB = { node: ringNode === null ? exits[0] : ringNode, dist: 0 };
+      } else {
+        sA = Core.nearestNode(g, A.lat, A.lon, 400, comp);
+        sB = Core.nearestNode(g, B.lat, B.lon, 400, comp);
+        if (!sA) throw new Error('Рядом со стартом нет проходимых улиц. Сдвиньте точку.');
+        if (!sB) throw new Error('Рядом с финишем нет проходимых улиц. Сдвиньте точку.');
+        if (g.comp[sA.node] !== g.comp[sB.node]) throw new Error('Между стартом и финишем нет пути без закрытых проходов. Включите слой «Закрытые проходы» и сдвиньте точки.');
+      }
 
       const forced = [];
       let skipped = 0;
@@ -321,17 +360,24 @@ export function initRoutePanel(app) {
       }
 
       S.lastGen = {
-        g, A: sA.node, B: sB.node, length: Lm, tol: prefs.tol, forced, attract, loop: prefs.loop,
+        g, A: sA.node, B: sB.node, length: Lm, tol: prefs.tol, forced, attract, loop,
+        exits, ringStart: ringNode, approachMax: prefs.approachMax, noRepeat: !prefs.allowRepeats,
         prefs: { appeal: prefs.appeal / 100, mainAvoid: prefs.main / 100, novelty: prefs.novelty / 100, poi: prefs.poi / 100 }
       };
       const res = await runGenerator(S.lastGen, 4, ac, 0.25);
       S.routes = res.routes;
       S.sel = S.routes.length ? 0 : -1;
+      const limits = [nBlocked ? 'закрытий и зон' : '', prefs.allowRepeats ? '' : 'правила без повторов'].filter(Boolean).join(' и ');
       if (!S.routes.length) {
-        say('Не удалось подобрать маршрут нужной длины. Измените дистанцию, увеличьте допуск или сдвиньте точки.', 'warn');
+        say('Не удалось подобрать маршрут нужной длины' + (limits ? ' с учётом ' + limits : '') + '. Измените дистанцию, увеличьте допуск' +
+          (prefs.allowRepeats ? '' : ', разрешите повторы улиц') + ' или сдвиньте точки.', 'warn');
       } else {
         let msg = 'Вариантов: ' + S.routes.length + '.';
-        if (res.approx) msg += ' Точно в допуск не попали, показаны ближайшие по длине.';
+        if (res.approx) {
+          const best = S.routes.reduce((a, r) => (r.err < a.err ? r : a));
+          msg += ' Точно в допуск' + (limits ? ' с учётом ' + limits : '') + ' не попали: ближайший вариант ' + fmtKm(best.length) + ' км.';
+        }
+        if (lostExits) msg += ' Выходов без пути к улицам: ' + lostExits + '.';
         if (skipped) msg += ' Мест вне зоны или за закрытыми проходами пропущено: ' + skipped + '.';
         if (sA.dist > 100 || sB.dist > 100) msg += ' Старт или финиш сдвинуты к ближайшей улице.';
         say(msg);
@@ -348,6 +394,7 @@ export function initRoutePanel(app) {
 
   async function runGenerator(o, count, ac, from) {
     const gen = Core.createGenerator(o.g, { ...o, count, seed: (Math.random() * 1e9) | 0, maxAttempts: 200 });
+    if (gen.state.error === 'exits') throw new Error('От выходов из дома некуда начать кольцо. Увеличьте предел подводки или проверьте зоны рядом с домом.');
     if (gen.state.error) throw new Error('В зоне слишком мало улиц для такой длины. Уменьшите дистанцию или сдвиньте старт.');
     while (!gen.run(35)) {
       const pr = gen.progress();
@@ -405,7 +452,7 @@ export function initRoutePanel(app) {
     if (f) { app.favorites.remove(f.id); toast('Маршрут убран из избранного.'); }
     else {
       app.favorites.add({
-        id: r.id, name: r.name, coords: r.coords, length: r.length, loop: r.loop,
+        id: r.id, name: r.name, coords: r.coords, ringCoords: r.ringCoords, approachCoords: r.approachCoords, length: r.length, loop: r.loop,
         newShare: r.metrics.newShare, created: Date.now()
       });
       toast('Маршрут сохранён в библиотеке.');
@@ -423,6 +470,7 @@ export function initRoutePanel(app) {
       const notes = [];
       if (r.off) notes.push('Длина отличается от заданной на ' + Math.round(r.err * 100) + '%');
       if (m.stepsLen > 0) notes.push('Есть лестницы: ' + Math.round(m.stepsLen) + ' м');
+      if (S.lastGen && S.lastGen.noRepeat && r.repeat > 60) notes.push('Повтор улиц: ' + Math.round(r.repeat / 10) * 10 + ' м');
       const fav = !!favOf(r);
       box.appendChild(el('article', { class: 'route', 'aria-current': String(i === S.sel), onclick: () => selectRoute(i) },
         el('h3', null, r.name),
@@ -435,8 +483,9 @@ export function initRoutePanel(app) {
         el('div', { class: 'meta' }, [
           Math.round(m.newShare * 100) + '% новых улиц',
           Math.round(Math.max(m.pathShare, m.parkShare) * 100) + '% тропы и парки',
-          'переходов ' + m.crossings
-        ].join(' · ')),
+          'переходов ' + m.crossings,
+          r.approach > 0 ? 'подводка 2 × ' + Math.round(r.approach / 10) * 10 + ' м' : ''
+        ].filter(Boolean).join(' · ')),
         notes.length ? el('div', { class: 'note' }, notes.join('. ')) : null,
         i === S.sel ? el('div', { class: 'actions' },
           el('button', { class: 'btn small', type: 'button', onclick: (e) => { e.stopPropagation(); downloadRoute(r.name, r.coords, r.length, r.loop); } }, 'Скачать GPX'),
@@ -457,22 +506,25 @@ export function initRoutePanel(app) {
       layers.routes.addLayer(L.polyline(r.coords, { color: muted, weight: 3, opacity: 0.45 }).on('click', () => selectRoute(i)));
     });
     const r = S.routes[S.sel];
-    if (r) drawLine(r.coords, fit);
+    if (r) drawLine(r, fit);
   }
-  function drawLine(coords, fit) {
+  /* r: {coords, ringCoords?, approachCoords?} — кольцо сплошной линией, подводка пунктиром из точек */
+  function drawLine(r, fit) {
     const route = cssVar('map-route'), paper = cssVar('paper');
-    layers.routes.addLayer(L.polyline(coords, { color: paper, weight: 9, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }));
-    layers.routes.addLayer(L.polyline(coords, { color: route, weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }));
+    const coords = r.coords, ring = r.ringCoords || coords;
+    if (r.approachCoords) layers.routes.addLayer(L.polyline(r.approachCoords, { color: route, weight: 3.5, opacity: 1, dashArray: '0.1 7', interactive: false, lineCap: 'round' }));
+    layers.routes.addLayer(L.polyline(ring, { color: paper, weight: 9, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }));
+    layers.routes.addLayer(L.polyline(ring, { color: route, weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }));
     for (const mk of Core.kmMarkers(coords, store.prefs.kmStep * 1000)) {
       layers.km.addLayer(L.marker([mk.lat, mk.lon], { icon: divIcon('mk-km', 24, 24, Core.fmtKm(mk.km)), interactive: false, keyboard: false }));
     }
     if (fit) map.fitBounds(L.latLngBounds(coords), { padding: [40, 40] });
   }
   /* Показать сохранённый маршрут: снимает выбор с текущих вариантов. */
-  app.showLine = (coords) => {
+  app.showLine = (r) => {
     S.sel = -1; renderResults();
     layers.routes.clearLayers(); layers.km.clearLayers();
-    drawLine(coords, true);
+    drawLine(Array.isArray(r) ? { coords: r } : r, true);
   };
 
   function downloadRoute(name, coords, length, loop) {
@@ -491,6 +543,8 @@ export function initRoutePanel(app) {
   }
 
   app.on('theme', () => { drawRoutes(false); renderClosed(); });
+  app.on('blocks', renderClosed);
+  app.on('start', renderAB);
 
   syncPrefs(); renderAB(); renderForced();
   if (store.A) $('#qA').value = store.A.label || coordText(store.A);

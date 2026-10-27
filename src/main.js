@@ -10,11 +10,13 @@ import { $, toast, uid } from './ui/dom.js';
 import { initModes } from './ui/modes.js';
 import { initSheet } from './ui/sheet.js';
 import { initRoutePanel } from './ui/route-panel.js';
+import { initHome } from './ui/home.js';
+import { initBlocks } from './ui/blocks.js';
 import { initLibraryPanel } from './ui/library-panel.js';
 import { initProgressPanel } from './ui/progress-panel.js';
 import { initSettings } from './ui/settings.js';
 
-const { map, layers, setTiles, toggleLayer } = createMap();
+const { map, layers, svg, setTiles, toggleLayer } = createMap();
 
 const dbError = () => toast('Браузер не даёт сохранить данные. Скачайте копию в настройках.');
 const tracks = collection('tracks', dbError);
@@ -30,7 +32,7 @@ if (store.explored.length) {
 
 const listeners = {};
 const app = {
-  map, layers, setTiles, tracks, favorites,
+  map, layers, svg, setTiles, tracks, favorites,
   S: {
     mode: null, routes: [], sel: -1, net: null, graph: null, graphKey: '', router: null,
     osmPois: [], forced: [], busy: false, abort: null, lastGen: null
@@ -70,6 +72,8 @@ for (const [id, key] of [['#lyExplored', 'explored'], ['#lyPlaces', 'osm'], ['#l
 
 initSheet(app);
 initModes(app);
+initHome(app);
+initBlocks(app);
 initRoutePanel(app);
 initLibraryPanel(app);
 initProgressPanel(app);

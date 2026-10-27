@@ -6,8 +6,11 @@ const STORE_KEY = 'rundom.v1';
 /* explored — треки до этапа 2; при запуске переезжают в IndexedDB. */
 const DEFAULTS = {
   explored: [], A: null, B: null,
+  /* дом и выходы, ручной старт кольца; закрытия, зоны и открытые на деле ворота OSM */
+  home: null, exits: [], ringStart: null, blocks: [], zones: [], openGates: [],
   prefs: {
     km: 10, kmPresets: [5, 10, 15, 21.1], tol: 0.08, loop: true,
+    startMode: 'home', approachMax: 1000, allowRepeats: false,
     main: 60, appeal: 40, novelty: 0, poi: 50, avoidSteps: true, strictGates: false, kmStep: 1, pace: '6:00'
   },
   layers: { explored: true, places: true, gates: true, osm: false },

@@ -58,3 +58,30 @@ export function download(name, text, type) {
 export function syncSeg(root, attr, value) {
   root.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset[attr] === String(value))));
 }
+
+/* Имя-кнопка: по нажатию превращается в поле, Enter или уход фокуса сохраняет, Esc отменяет.
+   onRename(новое имя) вызывается, только если имя изменилось. */
+export function renameable(name, onRename) {
+  const btn = el('button', { class: 'rename', type: 'button', title: 'Переименовать' }, name);
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const input = el('input', { class: 'edit', type: 'text', value: name, 'aria-label': 'Новое название' });
+    let done = false;
+    const finish = (keep) => {
+      if (done) return;
+      done = true;
+      const v = input.value.trim();
+      const changed = keep && v && v !== name;
+      if (changed) onRename(v);
+      input.replaceWith(renameable(changed ? v : name, onRename));
+    };
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+      if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+    btn.replaceWith(input);
+    input.focus(); input.select();
+  });
+  return btn;
+}

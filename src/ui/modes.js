@@ -13,8 +13,9 @@ export function initModes(app) {
     $('#pickB').setAttribute('aria-pressed', String(m === 'B'));
     $('#banner').hidden = !m;
     $('#bannerText').textContent = text || '';
-    $('#bannerOk').hidden = m !== 'draw';
-    $('#bannerUndo').hidden = m !== 'draw';
+    const h = handlers[m] || {};
+    $('#bannerOk').hidden = !h.ok;
+    $('#bannerUndo').hidden = !h.undo;
     if (prev && prev !== m && handlers[prev] && handlers[prev].leave) handlers[prev].leave();
     if (m) app.sheet.peek();
   }

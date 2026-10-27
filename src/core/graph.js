@@ -6,8 +6,13 @@ import { CLS, isBlockingBarrier, classifyWay } from './osm.js';
 function buildGraph(parsed, opts) {
   opts = opts || {};
   var blocked = new Set(), closedGates = [];
+  var open = opts.openGates || [];
+  function reopened(b) {
+    for (var i = 0; i < open.length; i++) if (hav(b.lat, b.lon, open[i].lat, open[i].lon) < 3) return true;
+    return false;
+  }
   parsed.barriers.forEach(function (b) {
-    if (isBlockingBarrier(b.tags, opts.strictGates)) {
+    if (isBlockingBarrier(b.tags, opts.strictGates) && !reopened(b)) {
       blocked.add(b.id);
       closedGates.push({ lat: b.lat, lon: b.lon, barrier: b.tags.barrier, access: b.tags.access || '', name: b.tags.name || '' });
     }
@@ -88,7 +93,13 @@ function buildGraph(parsed, opts) {
   g.deg = new Int32Array(n);
   for (var u2 = 0; u2 < n; u2++) g.deg[u2] = g.adjStart[u2 + 1] - g.adjStart[u2];
 
-  /* компоненты связности */
+  computeComponents(g);
+  return g;
+}
+
+/* Компоненты связности; рёбра из g.eBlock (закрытия, зоны) не соединяют узлы. */
+function computeComponents(g) {
+  var n = g.n, bl = g.eBlock;
   g.comp = new Int32Array(n).fill(-1);
   g.compSize = [];
   var stack = new Int32Array(n);
@@ -100,13 +111,13 @@ function buildGraph(parsed, opts) {
       var x = stack[--sp]; cnt++;
       for (var k = g.adjStart[x]; k < g.adjStart[x + 1]; k++) {
         var ed = g.adjEdge[k];
+        if (bl && bl[ed]) continue;
         var y = g.eF[ed] === x ? g.eT[ed] : g.eF[ed];
         if (g.comp[y] === -1) { g.comp[y] = cid; stack[sp++] = y; }
       }
     }
     g.compSize.push(cnt);
   }
-  return g;
 }
 
 function other(g, e, v) { return g.eF[e] === v ? g.eT[e] : g.eF[e]; }
@@ -243,4 +254,4 @@ function applyExplored(g, lines) {
   return marked;
 }
 
-export { buildGraph, other, nearestNode, applyContext, poiNear, applyExplored };
+export { buildGraph, computeComponents, other, nearestNode, applyContext, poiNear, applyExplored };
