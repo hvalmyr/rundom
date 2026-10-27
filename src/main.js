@@ -4,6 +4,7 @@ import './styles/tokens.css';
 import './styles/app.css';
 
 import { store, save } from './storage/store.js';
+import { ui, saveUi } from './storage/session.js';
 import { collection } from './storage/db.js';
 import { createMap } from './map/map.js';
 import { $, toast, uid, smoothDetails } from './ui/dom.js';
@@ -61,7 +62,7 @@ for (const t of TABS) {
     }
     $('#panel').scrollTop = 0;
     app.sheet.open();
-    app.tab = t; app.emit('tab');
+    app.tab = t; ui.tab = t; saveUi(); app.emit('tab');
   });
 }
 
@@ -105,3 +106,33 @@ initSettings(app);
 syncLayers();
 
 window.__rundom = app;
+
+/* ---------- последнее состояние экрана ---------- */
+/* раскрытые разделы — по порядку на странице */
+document.querySelectorAll('details.more').forEach((d, i) => {
+  if (ui.open && ui.open[i] !== undefined) d.open = ui.open[i];
+  d.addEventListener('toggle', () => { (ui.open ||= {})[i] = d.open; saveUi(); });
+});
+/* прокрутка панели — своя у каждой вкладки */
+let scrollTimer = null;
+$('#panel').addEventListener('scroll', () => {
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => { (ui.scroll ||= {})[app.tab] = $('#panel').scrollTop; saveUi(); }, 200);
+}, { passive: true });
+const scrollWas = (ui.scroll || {})[ui.tab || 'route'] || 0;
+if (ui.tab && ui.tab !== 'route' && TABS.includes(ui.tab)) {
+  const sheet = ui.sheet;
+  $('#tab-' + ui.tab).click();
+  /* переход по вкладке раскрывает лист — возвращаем, как был */
+  if (sheet) app.sheet.set(sheet);
+}
+/* содержимое вкладки дорисовывается не сразу: прокрутку возвращаем, пока высоты не хватит */
+if (scrollWas) {
+  let tries = 0;
+  const restore = () => {
+    const p = $('#panel');
+    p.scrollTop = scrollWas;
+    if (Math.abs(p.scrollTop - scrollWas) > 2 && ++tries < 20) setTimeout(restore, 250);
+  };
+  setTimeout(restore, 50);
+}

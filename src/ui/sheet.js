@@ -1,13 +1,14 @@
 /* Нижний лист на телефоне: три положения (свёрнут, половина, почти весь экран), тянется за ручку.
    Высота листа равна видимой части: так его содержимое прокручивается до конца в любом положении. */
 import { $ } from './dom.js';
+import { ui, saveUi } from '../storage/session.js';
 
 const MOBILE = window.matchMedia('(max-width: 860px)');
 const STOPS = { peek: 0.16, half: 0.5, full: 1 };
 
 export function initSheet(app) {
   const panel = $('#panel'), handle = $('#sheetHandle');
-  let state = 'half';
+  let state = STOPS[ui.sheet] ? ui.sheet : 'half';
 
   /* лист до шапки с небольшим зазором: карта под ним видна краем */
   const maxH = () => Math.max(200, window.innerHeight - ($('.top').getBoundingClientRect().height || 84) - 48);
@@ -15,6 +16,7 @@ export function initSheet(app) {
   function setVisible(v) { document.documentElement.style.setProperty('--sheet-visible', Math.round(v) + 'px'); }
   function set(name) {
     state = name;
+    if (ui.sheet !== name) { ui.sheet = name; saveUi(); }
     setVisible(visible(name));
     setTimeout(() => app.map.invalidateSize(), 240);
   }
@@ -50,6 +52,7 @@ export function initSheet(app) {
 
   app.sheet = {
     peek() { if (MOBILE.matches) set('peek'); },
-    open() { if (MOBILE.matches && state === 'peek') set('half'); }
+    open() { if (MOBILE.matches && state === 'peek') set('half'); },
+    set(name) { if (MOBILE.matches && STOPS[name]) set(name); }
   };
 }

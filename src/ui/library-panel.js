@@ -3,6 +3,7 @@ import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { cssVar, divIcon } from '../map/map.js';
 import { $, el, fmtKm, uid, round5, toast, renameable, iconBtn, removeBtn, download } from './dom.js';
+import { ui } from '../storage/session.js';
 
 const KIND = { gpx: 'GPX', route: 'маршрут', manual: 'вручную' };
 const fmtDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
@@ -235,5 +236,8 @@ export function initLibraryPanel(app) {
   app.on('theme', renderTracks);
   app.on('favorites', renderFavorites);
   app.on('lineShown', () => { renderFavorites(); renderTracks(); });
+  /* показанный на карте маршрут или пробежка — снова на карте, без перелёта к ним */
+  const f = ui.lineId && (favorites.items.find((x) => x.id === ui.lineId) || tracks.items.find((x) => x.id === ui.lineId));
+  if (f) app.showLine(f.lines ? { lines: f.lines } : f, f.id, false);
   render();
 }

@@ -2,6 +2,7 @@
 import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
+import { ui, saveUi } from '../storage/session.js';
 import { loadStreets } from '../data/streets.js';
 import { divIcon } from '../map/map.js';
 import { $, el, tick, fmtKm, fmtNum, fmtTime, toast, download, syncSeg, uid, ICON, userMessage } from './dom.js';
@@ -288,7 +289,11 @@ export function initRoutePanel(app) {
   app.toggleForced = toggleForced;
 
   /* ---------- генерация ---------- */
-  const say = (msg, kind) => { const s = $('#status'); s.textContent = msg || ''; s.className = 'status' + (kind ? ' ' + kind : ''); };
+  const say = (msg, kind) => {
+    const s = $('#status'); s.textContent = msg || ''; s.className = 'status' + (kind ? ' ' + kind : '');
+    /* итог построения помним, ход построения — нет */
+    if (!S.busy) { ui.status = msg ? { msg, kind } : null; saveUi(); }
+  };
 
   /* Полоса прогресса: длина — доля работы. Пока ждём сеть (wait), полоса не стоит: по дорожке бежит блик. */
   function braid(frac) {
@@ -454,6 +459,8 @@ export function initRoutePanel(app) {
       else say(userMessage(e, 'Не удалось построить маршрут.'), 'warn');
     } finally {
       setBusy(false); S.abort = null;
+      const st = $('#status');
+      ui.status = st.textContent ? { msg: st.textContent, kind: st.className.replace('status', '').trim() } : null; saveUi();
     }
   }
   $('#go').addEventListener('click', generate);
@@ -512,7 +519,18 @@ export function initRoutePanel(app) {
   }
 
   /* ---------- варианты ---------- */
+  /* варианты переживают перезагрузку: без графа (правки «верёвкой» после неё недоступны до нового построения) */
+  const r5 = (q) => [Math.round(q[0] * 1e5) / 1e5, Math.round(q[1] * 1e5) / 1e5];
+  const slim = (r) => ({
+    id: r.id, name: r.name, loop: r.loop, length: r.length, approach: r.approach, err: r.err, off: r.off, repeat: r.repeat,
+    dirOut: r.dirOut, edits: r.edits, coords: r.coords.map(r5),
+    ringCoords: r.ringCoords && r.ringCoords.map(r5), approachCoords: r.approachCoords && r.approachCoords.map(r5),
+    metrics: { ...r.metrics, pois: (r.metrics.pois || []).map((p) => ({ name: p.name, cat: p.cat })) }
+  });
+  function keepRoutes() { ui.routes = S.routes.map(slim); ui.sel = S.sel; saveUi(); }
+
   function renderResults() {
+    keepRoutes();
     const box = $('#results');
     box.innerHTML = '';
     S.routes.forEach((r, i) => {
@@ -581,7 +599,7 @@ export function initRoutePanel(app) {
     app.gl.lines('alt', altIdx.map((i) => S.routes[i].coords));
     const r = S.routes[S.sel];
     S.routeLayers = r ? drawLine(r, fit) : null;
-    if (S.lineId) { S.lineId = null; app.emit('lineShown'); }
+    if (S.lineId) { S.lineId = null; ui.lineId = null; app.emit('lineShown'); }
     app.emit('routeDrawn');
   }
   /* r: {coords, ringCoords?, approachCoords?} — кольцо сплошной линией, подводка пунктиром из точек */
@@ -615,18 +633,18 @@ export function initRoutePanel(app) {
     return out;
   }
   /* Показать сохранённый маршрут: снимает выбор с текущих вариантов. id запоминается в S.lineId. */
-  app.showLine = (r, id = null) => {
+  app.showLine = (r, id = null, fit = true) => {
     S.sel = -1; renderResults();
     clearLines();
     altIdx.length = 0;
-    drawLine(Array.isArray(r) ? { coords: r } : r, true);
-    S.lineId = id;
+    drawLine(Array.isArray(r) ? { coords: r } : r, fit);
+    S.lineId = id; ui.lineId = id; saveUi();
     S.routeLayers = null; app.emit('routeDrawn');
   };
   app.hideLine = () => {
     clearLines();
     altIdx.length = 0;
-    S.lineId = null;
+    S.lineId = null; ui.lineId = null; saveUi();
     S.routeLayers = null; app.emit('routeDrawn');
   };
 
@@ -653,4 +671,13 @@ export function initRoutePanel(app) {
   if (store.B) $('#qB').value = store.B.label || coordText(store.B);
   app.generate = generate;
   Object.assign(app, { say, setBusy, braid, runGenerator, renderResults, drawRoutes, fmtKm });
+
+  /* после перезагрузки — прежние варианты и выбранный из них */
+  if (ui.routes && ui.routes.length) {
+    S.routes = ui.routes;
+    S.sel = Math.min(ui.sel ?? 0, S.routes.length - 1);
+    renderResults();
+    if (S.sel >= 0) drawRoutes(false);
+    if (ui.status) say(ui.status.msg, ui.status.kind);
+  }
 }

@@ -3,6 +3,7 @@
 import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
+import { ui, saveUi } from '../storage/session.js';
 import { cssVar } from '../map/map.js';
 import { $, el, fmtKm, fmt1, syncSeg } from './dom.js';
 import { placeMarker, placeSvg } from './place-icons.js';
@@ -267,6 +268,7 @@ export function initCoverageMap(app) {
   }
 
   function renderPanel() {
+    keep();
     panel.innerHTML = '';
     panel.hidden = !selected || !active;
     if (panel.hidden) return;
@@ -413,6 +415,7 @@ export function initCoverageMap(app) {
 
   /* ---------- вкладка: сводка, районы, места ---------- */
   function renderCards() {
+    keep();
     const I = idx();
     let done = 0;
     for (const id of stats.keys()) done += doneOf(id);
@@ -464,6 +467,7 @@ export function initCoverageMap(app) {
     $('#distCount').textContent = ' · ' + list.length;
   }
   async function renderPlaceList() {
+    keep();
     const box = $('#covPlaces');
     const dists = [];
     for (const d of idx().d) {
@@ -510,7 +514,30 @@ export function initCoverageMap(app) {
     placeholder: ['Все районы', 'Ещё район']
   });
 
+  /* что выбрано во вкладке — переживает перезагрузку */
+  function keep() {
+    if (!restored) return; /* до восстановления не затираем сохранённое */
+    ui.cov = { selected, tab, placeView, dCat, placeCat, placeDists, catsOpen, sortBy };
+    saveUi();
+  }
+  let restored = false;
+  function restore() {
+    restored = true;
+    const c = ui.cov;
+    if (!c) return;
+    if (Array.isArray(c.placeDists)) placeDists = c.placeDists.filter((id) => info(id));
+    if (c.placeCat) placeCat = c.placeCat;
+    if (c.sortBy) sortBy = c.sortBy;
+    catsOpen = !!c.catsOpen;
+    placePick.render();
+    if (c.selected && info(c.selected)) {
+      selected = c.selected; tab = c.tab || 'streets'; dCat = c.dCat || 'all';
+      placeView = c.placeView || null;
+    }
+  }
+
   function renderAll(redrawStreets = true) {
+    keep();
     if (!active) { renderPanel(); return; }
     paintFills(); renderCards(); renderDistricts(); renderPanel(); renderPlaceList();
     if (redrawStreets) drawStreets();
@@ -554,6 +581,10 @@ export function initCoverageMap(app) {
     await build();
     if (!decoded.size) { placePick.render(); loadAll(); }
     await computeStats();
+    if (!restored) {
+      restore();
+      if (selected && !stats.has(selected)) { try { stats.set(selected, await C.stats(selected)); } catch (e) { /* покажем без улиц */ } }
+    }
     if (active) renderAll();
   }
   function leave() {
