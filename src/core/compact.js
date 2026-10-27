@@ -1,10 +1,13 @@
 /* Компактная запись улиц, парков и мест: тайлы своего графа и кэш ответов Overpass.
    Разворачивается обратно в элементы в форме ответа Overpass, дальше их разбирают
    parseNetwork и parseContext, как живой ответ. Теги урезаны до тех, что читают правила. */
+import { isSignalNode } from './osm.js';
 
 var E6 = 1e6;
-var WAY_KEYS = ['highway', 'name', 'foot', 'access', 'footway', 'crossing', 'service', 'surface', 'tracktype', 'indoor'];
-var BARRIER_KEYS = ['barrier', 'foot', 'access', 'locked', 'name'];
+var WAY_KEYS = ['highway', 'name', 'foot', 'access', 'footway', 'crossing', 'crossing:signals', 'service', 'surface', 'tracktype', 'indoor'];
+/* теги узлов: ворота и заборы, светофоры и регулируемые переходы */
+var NODE_KEYS = ['barrier', 'foot', 'access', 'locked', 'name', 'highway', 'crossing', 'crossing:signals'];
+var keptNode = function (t) { return !!(t && (t.barrier || isSignalNode(t))); };
 var PARK_KEYS = ['name', 'leisure', 'landuse', 'natural'];
 var POI_KEYS = ['name', 'name:ru', 'tourism', 'historic', 'man_made', 'amenity', 'waterway'];
 
@@ -52,7 +55,7 @@ function packNetwork(elements) {
   }
   var used = new Set();
   ways.forEach(function (w) { w.nodes.forEach(function (id) { if (nodes.has(id)) used.add(id); }); });
-  nodes.forEach(function (nd, id) { if (nd.tags && nd.tags.barrier) used.add(id); });
+  nodes.forEach(function (nd, id) { if (keptNode(nd.tags)) used.add(id); });
   var ids = Array.from(used).sort(function (a, b) { return a - b; });
   var at = new Map();
   ids.forEach(function (id, k) { at.set(id, k); });
@@ -68,7 +71,7 @@ function packNetwork(elements) {
   });
   ids.forEach(function (id, k) {
     var nd = nodes.get(id);
-    if (nd.tags && nd.tags.barrier) b.push(k, T.add(pick(nd.tags, BARRIER_KEYS)));
+    if (keptNode(nd.tags)) b.push(k, T.add(pick(nd.tags, NODE_KEYS)));
   });
   return {
     v: 1, T: T.list,

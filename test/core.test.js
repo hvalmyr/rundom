@@ -126,7 +126,54 @@ test('compass: the farthest point of every ring lies in the chosen sector', () =
     for (const p of r.coords) { const d = Core.hav(r.coords[0][0], r.coords[0][1], p[0], p[1]); if (d > fd) { fd = d; far = p; } }
     const b = Core.bearing(r.coords[0][0], r.coords[0][1], far[0], far[1]);
     assert.ok(Math.abs(((b - 90) % 360 + 540) % 360 - 180) <= 32, 'bearing ' + b);
+    /* и всё кольцо — в секторе: вне его не больше нескольких процентов длины, назад за старт не уходит */
+    const s = r.coords[0];
+    let out = 0, tot = 0;
+    for (let i = 1; i < r.coords.length; i++) {
+      const p = r.coords[i], l = Core.hav(r.coords[i - 1][0], r.coords[i - 1][1], p[0], p[1]);
+      tot += l;
+      const d = Core.hav(s[0], s[1], p[0], p[1]);
+      const off = Math.abs(((Core.bearing(s[0], s[1], p[0], p[1]) - 90) % 360 + 540) % 360 - 180);
+      if (d > 250 && off > 40) out += l;
+      assert.ok((p[1] - s[1]) * 111320 * Math.cos(s[0] * Math.PI / 180) > -150, 'behind the start');
+    }
+    assert.ok(out / tot < 0.06, 'outside the sector ' + Math.round(100 * out / tot) + '%');
   }
+});
+
+test('crossings: only signalised ones count, a crossing over an island counts once', () => {
+  /* улица с запада на восток, дорожка с юга на север пересекает её по двум переходам через островок */
+  const n = (id, lat, lon, tags) => ({ type: 'node', id, lat, lon, tags });
+  const els = [
+    n(1, 55.750, 37.600), n(2, 55.750, 37.601), n(3, 55.750, 37.602),
+    n(10, 55.7495, 37.601), n(11, 55.7499, 37.601), n(13, 55.7501, 37.601), n(14, 55.7505, 37.601),
+    n(20, 55.7495, 37.603), n(21, 55.750, 37.603, { highway: 'crossing', crossing: 'uncontrolled' }), n(22, 55.7505, 37.603),
+    { type: 'way', id: 1, tags: { highway: 'primary' }, nodes: [1, 2, 3, 21] },
+    { type: 'way', id: 2, tags: { highway: 'footway' }, nodes: [10, 11] },
+    { type: 'way', id: 3, tags: { highway: 'footway', footway: 'crossing', crossing: 'traffic_signals' }, nodes: [11, 2] },
+    { type: 'way', id: 4, tags: { highway: 'footway', footway: 'crossing', crossing: 'traffic_signals' }, nodes: [2, 13] },
+    { type: 'way', id: 5, tags: { highway: 'footway' }, nodes: [13, 14] },
+    /* нерегулируемый переход не считается */
+    { type: 'way', id: 6, tags: { highway: 'footway', footway: 'crossing' }, nodes: [20, 21, 22] }
+  ];
+  const g = Core.buildGraph(Core.parseNetwork({ elements: els }), {});
+  const path = (ids) => {
+    const nodes = ids.map((id) => Core.nearestNode(g, els.find((e) => e.id === id).lat, els.find((e) => e.id === id).lon, 5).node);
+    const edges = [];
+    for (let i = 1; i < nodes.length; i++) {
+      for (let k = g.adjStart[nodes[i]]; k < g.adjStart[nodes[i] + 1]; k++) {
+        const e = g.adjEdge[k];
+        if (Core.other(g, e, nodes[i]) === nodes[i - 1]) { edges.push(e); break; }
+      }
+    }
+    return Core.analyzeRoute(g, nodes, edges, {});
+  };
+  assert.equal(path([10, 11, 2, 13, 14]).crossings, 1);
+  assert.equal(path([20, 21, 22]).crossings, 0);
+  /* светофор на узле дороги делает переход регулируемым и без тега на пути */
+  els.find((e) => e.id === 21).tags = { highway: 'crossing', crossing: 'traffic_signals' };
+  const g2 = Core.buildGraph(Core.parseNetwork({ elements: els }), {});
+  assert.ok(g2.eSig.some((x) => x));
 });
 
 test('districts: one random district per variant, strict keeps the ring inside', () => {

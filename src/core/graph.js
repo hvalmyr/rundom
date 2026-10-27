@@ -1,6 +1,6 @@
 /* Граф улиц: сборка, поиск ближайшего узла, парки, места и пройденные улицы. */
 import { hav, px, py, pointInRing, resample } from './geo.js';
-import { CLS, isBlockingBarrier, classifyWay } from './osm.js';
+import { CLS, isBlockingBarrier, isSignalWay, classifyWay } from './osm.js';
 
 /* ---------- граф ---------- */
 function buildGraph(parsed, opts) {
@@ -19,7 +19,19 @@ function buildGraph(parsed, opts) {
   });
 
   var idx = new Map(), latA = [], lonA = [];
-  var eF = [], eT = [], eL = [], eP = [], eC = [], eAp = [], eFix = [], eName = [];
+  var eF = [], eT = [], eL = [], eP = [], eC = [], eAp = [], eFix = [], eName = [], eSig = [];
+  /* Регулируемый переход: путь-переход со светофором (по тегу пути или его узла) или дорожка,
+     пересекающая проезжую часть в узле-светофоре. Улицы и дороги со светофорами — не переходы:
+     по ним бегут вдоль. */
+  var signals = parsed.signals || new Set(), roadNode = new Set();
+  if (signals.size) {
+    parsed.ways.forEach(function (w) {
+      var cw = classifyWay(w.tags, opts);
+      if (cw && cw.cls !== undefined && cw.cls !== CLS.path && cw.cls !== CLS.steps) {
+        for (var k = 0; k < w.nodes.length; k++) if (signals.has(w.nodes[k])) roadNode.add(w.nodes[k]);
+      }
+    });
+  }
   var names = [], nameIdx = new Map();
   var closedWays = [];
 
@@ -51,6 +63,8 @@ function buildGraph(parsed, opts) {
       if (ni === undefined) { ni = names.length; names.push(nm); nameIdx.set(nm, ni); }
     }
     var ns = w.nodes;
+    var sigWay = c.fix > 0 && isSignalWay(w.tags);
+    if (c.fix > 0 && !sigWay) for (var si = 0; si < ns.length && !sigWay; si++) sigWay = signals.has(ns[si]);
     for (var i = 0; i < ns.length - 1; i++) {
       var a = ns[i], b = ns[i + 1];
       var na = parsed.nodes.get(a), nb = parsed.nodes.get(b);
@@ -62,6 +76,7 @@ function buildGraph(parsed, opts) {
       if (ia === ib) continue;
       eF.push(ia); eT.push(ib); eL.push(len); eP.push(c.pen); eC.push(c.cls);
       eAp.push(c.appeal); eFix.push(c.fix); eName.push(ni);
+      eSig.push(sigWay || (c.cls === CLS.path && (roadNode.has(a) || roadNode.has(b))) ? 1 : 0);
     }
   }
 
@@ -72,7 +87,7 @@ function buildGraph(parsed, opts) {
     X: new Float64Array(n), Y: new Float64Array(n),
     eF: Int32Array.from(eF), eT: Int32Array.from(eT),
     eLen: Float64Array.from(eL), ePen: Float32Array.from(eP), eCls: Uint8Array.from(eC),
-    eAp: Float32Array.from(eAp), eFix: Float32Array.from(eFix), eName: Int32Array.from(eName),
+    eAp: Float32Array.from(eAp), eFix: Float32Array.from(eFix), eName: Int32Array.from(eName), eSig: Uint8Array.from(eSig),
     eExpl: new Uint8Array(E), ePark: new Uint8Array(E),
     names: names, closedGates: closedGates, closedWays: closedWays,
     pois: [], poiGrid: null

@@ -76,6 +76,15 @@ function isBlockingBarrier(t, strict) {
   return accessClosed || t.locked === 'yes';
 }
 
+/* Светофор на узле: сам светофор на дороге или регулируемый переход (узел на проезжей части). */
+function isSignalNode(t) {
+  return !!t && (t.highway === 'traffic_signals' || t.crossing === 'traffic_signals' || t['crossing:signals'] === 'yes');
+}
+/* Путь-переход со светофором (footway=crossing и т. п. с тегом регулирования). */
+function isSignalWay(t) {
+  return t.crossing === 'traffic_signals' || t['crossing:signals'] === 'yes';
+}
+
 /* ---------- Overpass: запросы и разбор ---------- */
 function aroundStr(R, A, B) {
   var r = Math.round(R);
@@ -100,7 +109,9 @@ function networkQuery(area) {
     'way["highway"~"' + HW_RE + '"]' + area + '->.w;\n' +
     '.w out body qt;\n' +
     'node(w.w);\nout skel qt;\n' +
-    'node["barrier"~"' + BARRIER_RE + '"]' + area + ';\nout body;';
+    'node["barrier"~"' + BARRIER_RE + '"]' + area + ';\nout body;\n' +
+    /* светофоры: регулируемые переходы считаются в карточке маршрута */
+    '(node["highway"="traffic_signals"]' + area + ';node["crossing"="traffic_signals"]' + area + ';node["crossing:signals"="yes"]' + area + ';);\nout body qt;';
 }
 
 function contextQuery(area) {
@@ -122,18 +133,21 @@ function contextQuery(area) {
 }
 
 function parseNetwork(json) {
-  var nodes = new Map(), ways = [], barriers = [];
+  var nodes = new Map(), ways = [], barriers = [], signals = new Set();
   var els = (json && json.elements) || [];
   for (var i = 0; i < els.length; i++) {
     var e = els[i];
     if (e.type === 'node') {
+      /* узел без тегов из node(w.w) не затирает тот же узел с тегами */
+      if (!e.tags && nodes.has(e.id)) continue;
       nodes.set(e.id, e);
       if (e.tags && e.tags.barrier) barriers.push(e);
+      if (isSignalNode(e.tags)) signals.add(e.id);
     } else if (e.type === 'way' && e.tags && e.nodes) {
       ways.push(e);
     }
   }
-  return { nodes: nodes, ways: ways, barriers: barriers };
+  return { nodes: nodes, ways: ways, barriers: barriers, signals: signals };
 }
 
 /* Сборка колец из внешних границ relation. */
@@ -239,4 +253,4 @@ function parseContext(json) {
   return { parks: parks, pois: pois };
 }
 
-export { CLS, classifyWay, isBlockingBarrier, aroundStr, loadRadius, networkQuery, contextQuery, parseNetwork, assembleRings, parseContext };
+export { CLS, classifyWay, isBlockingBarrier, isSignalNode, isSignalWay, aroundStr, loadRadius, networkQuery, contextQuery, parseNetwork, assembleRings, parseContext };

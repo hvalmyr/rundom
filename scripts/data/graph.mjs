@@ -1,12 +1,12 @@
 /* Свой граф улиц из выгрузки OpenStreetMap → <out>/g/<x>_<y>.json и <out>/g/index.json.
    Запуск: node scripts/data/graph.mjs <Moscow.osm.pbf> [out=public/data].
    В тайле ~2,2 × 2,2 км то же, что приложение иначе спрашивает у Overpass (networkQuery и contextQuery):
-   пешеходные пути с узлами, ворота и заборы-узлы, парки и интересные места — в компактной записи
+   пешеходные пути с узлами, ворота и заборы-узлы, светофоры, парки и интересные места — в компактной записи
    src/core/compact.js. Путь лежит в каждом тайле, который задевает, целиком.
    index.json: tiles — файлы, cover — тайлы, где данным можно верить (пустой тайл в покрытии — поле или вода). */
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { readPbf } from './pbf.mjs';
-import { classifyWay } from '../../src/core/osm.js';
+import { classifyWay, isSignalNode } from '../../src/core/osm.js';
 import { simplifyDP } from '../../src/core/geo.js';
 import { GRID, tileKey, tileOf, packNetwork, packContext } from '../../src/core/compact.js';
 
@@ -64,6 +64,8 @@ function tile(k) {
 const keyAt = (lat, lon) => { const [x, y] = tileOf(lat, lon); return tileKey(x, y); };
 const nodeEl = (i, tags) => ({ type: 'node', id: nId[i], lat: nLat[i], lon: nLon[i], tags });
 const barriers = new Map(); /* индекс узла → теги ворот */
+const signals = new Map();  /* индекс узла → теги светофора или регулируемого перехода */
+const tagsOf = (i) => barriers.get(i) || signals.get(i);
 /* тайлы, где выгрузка вообще есть данные: у её края пути обрезаны, поэтому покрытие — эти тайлы без крайнего ряда */
 const present = new Set();
 let nWays = 0;
@@ -90,6 +92,7 @@ readPbf(FILE, {
     present.add(keyAt(lat, lon));
     if (t) {
       if (t.barrier && BARRIER.test(t.barrier)) barriers.set(nN, t);
+      else if (isSignalNode(t)) signals.set(nN, t);
       if (poi(t)) tile(keyAt(lat, lon)).pois.push({ type: 'node', id, lat, lon, tags: t });
     }
     nN++;
@@ -105,7 +108,7 @@ readPbf(FILE, {
       for (const k of keys) {
         const tl = tile(k);
         tl.ways.push(way);
-        for (const i of idx) if (!tl.nodes.has(i)) tl.nodes.set(i, nodeEl(i, barriers.get(i)));
+        for (const i of idx) if (!tl.nodes.has(i)) tl.nodes.set(i, nodeEl(i, tagsOf(i)));
       }
       nWays++;
       return;
@@ -119,7 +122,7 @@ readPbf(FILE, {
     }
   }
 });
-log('проход 2: узлов', nN, 'пешеходных путей', nWays, 'ворот и заборов', barriers.size);
+log('проход 2: узлов', nN, 'пешеходных путей', nWays, 'ворот и заборов', barriers.size, 'светофоров', signals.size);
 
 for (const r of rels) {
   const rings = r.ways.map((w) => relGeom.get(w)).filter((g) => g && g.length > 1);
