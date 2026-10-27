@@ -45,7 +45,9 @@ export function initSettings(app) {
   }
 
   $('#exportData').addEventListener('click', () => {
-    download('rundom-kopiya.json', JSON.stringify({ app: BACKUP_APP, version: 1, explored: store.explored, prefs: store.prefs }), 'application/json');
+    download('rundom-kopiya.json', JSON.stringify({
+      app: BACKUP_APP, version: 2, prefs: store.prefs, tracks: app.tracks.items, favorites: app.favorites.items
+    }), 'application/json');
   });
   $('#importData').addEventListener('click', () => $('#dataFile').click());
   $('#dataFile').addEventListener('change', async (e) => {
@@ -53,12 +55,15 @@ export function initSettings(app) {
     try {
       const d = JSON.parse(await f.text());
       if (d.app !== BACKUP_APP && d.app !== 'begovoj-atlas') throw new Error('bad');
-      const have = new Set(store.explored.map((x) => x.id));
-      for (const x of d.explored || []) if (x && x.id && Array.isArray(x.lines) && !have.has(x.id)) store.explored.push(x);
+      /* version 1 и прототип хранили треки в explored */
+      const tracks = (d.tracks || d.explored || []).filter((x) => x && x.id && Array.isArray(x.lines))
+        .map((x) => ({ created: Date.now(), ...x }));
+      const nT = await app.tracks.merge(tracks);
+      const nF = await app.favorites.merge((d.favorites || []).filter((x) => x && Array.isArray(x.coords)));
       if (d.prefs) Object.assign(store.prefs, d.prefs);
       save();
-      toast('Копия загружена. Обновляю страницу…');
-      setTimeout(() => location.reload(), 800);
+      app.renderLibrary();
+      toast('Копия загружена: треков ' + nT + ', маршрутов ' + nF + '.');
     } catch (err) { toast('Это не копия rundom.'); }
     e.target.value = '';
   });

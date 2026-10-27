@@ -35,3 +35,19 @@ test('GPX round trip keeps points', () => {
   assert.equal(back.name, 'Тест');
   assert.deepEqual(back.tracks[0], coords);
 });
+
+test('newDistance counts only streets not run before, both sides as one', () => {
+  const street = [[55.75, 37.6], [55.76, 37.6]];
+  const otherSide = [[55.75, 37.60015], [55.76, 37.60015]]; /* ~10 м в сторону */
+  assert.equal(Math.round(Core.newDistance([otherSide], [street])), 0);
+  const fresh = Core.newDistance([street], []);
+  assert.ok(Math.abs(fresh - Core.polyLength(street)) < 15);
+});
+
+test('track and route titles describe the content', () => {
+  assert.equal(Core.trackTitle('2026-10-26T18:10:00', 11320, 'Нескучный сад'), '26 октября, вечер · Нескучный сад · 11,3 км');
+  assert.equal(Core.routeTitle({ pois: [{ name: 'Музеон', cat: 'park' }], streets: ['Крымский Вал'] }, 'x'), 'Музеон · Крымский Вал');
+  assert.equal(Core.routeTitle({ pois: [], streets: [] }, 'Маршрут'), 'Маршрут');
+  assert.equal(Core.routeTitle({ pois: [{ name: 'В. И. Ленину', cat: 'history' }], streets: [] }, 'x'), 'Памятник В. И. Ленину');
+  assert.equal(Core.routeTitle({ pois: [{ name: 'Ленину', cat: 'history' }, { name: 'Сквер Тургенева', cat: 'park' }], streets: [] }, 'x'), 'Сквер Тургенева');
+});

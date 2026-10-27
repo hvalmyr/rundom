@@ -176,7 +176,28 @@ details.more[open] summary::after { content: "−"; }
 .route .actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
 .route .len { font: 600 15px/20px var(--font-display); font-variant-numeric: tabular-nums; }
 
+.star {
+  grid-row: 1; grid-column: 2; width: 32px; height: 32px; margin: -6px -6px 0 0; padding: 0;
+  display: grid; place-items: center; border: 0; background: none; color: var(--ink-muted); cursor: pointer;
+}
+.star:hover { color: var(--ink); }
+.star svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.star[aria-pressed="true"] { color: var(--petrol); }
+.star[aria-pressed="true"] svg { fill: currentColor; }
+
+/* ---------- итог импорта ---------- */
+.summary { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.summary .figs { display: flex; gap: var(--space-6); flex-wrap: wrap; }
+.summary .big { font: 600 24px/28px var(--font-display); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.summary .big.own { color: var(--petrol); }
+.summary .files { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
+.summary .head { display: flex; justify-content: space-between; align-items: center; }
+
 /* ---------- списки ---------- */
+.item .rename { all: unset; cursor: text; font-weight: 500; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.item .rename:hover { text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; }
+.item .rename:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.item input.edit { width: 100%; min-height: 30px; padding: 3px 6px; font-weight: 500; }
 .list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .list:empty { display: none; }
 .item { display: flex; align-items: center; gap: var(--space-2); padding: 10px 0; border-bottom: 1px solid var(--line); min-width: 0; }

@@ -4,3 +4,5 @@ export * from './graph.js';
 export * from './routing.js';
 export * from './generator.js';
 export * from './track.js';
+export * from './coverage.js';
+export * from './naming.js';

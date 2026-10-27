@@ -1,69 +1,160 @@
-/* Вкладка «Библиотека»: треки GPX и ручные отметки пройденных улиц. */
+/* Вкладка «Библиотека»: избранные маршруты, треки GPX и ручные отметки пройденных улиц. */
 import L from 'leaflet';
 import * as Core from '../core/index.js';
-import { store, save } from '../storage/store.js';
 import { cssVar, divIcon } from '../map/map.js';
-import { $, el, fmtKm, uid, round5, toast } from './dom.js';
+import { $, el, fmtKm, uid, round5, toast, download } from './dom.js';
 
 const KIND = { gpx: 'GPX', route: 'маршрут', manual: 'вручную' };
+const fmtDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 
 export function initLibraryPanel(app) {
-  const { map, layers, S } = app;
+  const { map, layers, S, tracks, favorites } = app;
   const lineKm = (lines) => lines.reduce((s, l) => s + Core.polyLength(l), 0);
+  const allLines = (except) => tracks.items.filter((t) => t !== except).flatMap((t) => t.lines);
 
-  function fitLines(entries) {
-    const pts = entries.flatMap((en) => en.lines.flat());
+  function fitLines(lines) {
+    const pts = lines.flat();
     if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
   }
 
-  function render() {
+  /* Имя-кнопка: по нажатию превращается в поле, Enter или уход фокуса сохраняет, Esc отменяет. */
+  function renameable(entry, coll) {
+    const btn = el('button', { class: 'rename', type: 'button', title: 'Переименовать' }, entry.name);
+    btn.addEventListener('click', () => {
+      const input = el('input', { class: 'edit', type: 'text', value: entry.name, 'aria-label': 'Новое название' });
+      let done = false;
+      const finish = (keep) => {
+        if (done) return;
+        done = true;
+        const v = input.value.trim();
+        if (keep && v && v !== entry.name) { entry.name = v; entry.autoName = false; coll.update(entry); }
+        render();
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+      });
+      input.addEventListener('blur', () => finish(true));
+      btn.replaceWith(input);
+      input.focus(); input.select();
+    });
+    return btn;
+  }
+
+  function renderFavorites() {
+    const list = $('#favList');
+    list.innerHTML = '';
+    for (const f of favorites.items.slice().reverse()) {
+      list.appendChild(el('div', { class: 'item' },
+        el('div', { class: 'grow' },
+          renameable(f, favorites),
+          el('div', { class: 'meta' }, fmtKm(f.length) + ' км · ' + Math.round((f.newShare || 0) * 100) + '% новых · ' + fmtDate(f.created))),
+        el('button', { class: 'btn small', type: 'button', onclick: () => { app.showLine(f.coords); app.sheet.peek(); } }, 'Показать'),
+        el('button', { class: 'btn small', type: 'button', onclick: () => app.downloadRoute(f.name, f.coords, f.length, f.loop) }, 'GPX'),
+        el('button', {
+          class: 'btn small ghost', type: 'button', 'aria-label': 'Удалить ' + f.name,
+          onclick: () => { favorites.remove(f.id); render(); app.emit('favorites'); }
+        }, 'Удалить')));
+    }
+    if (!favorites.items.length) list.appendChild(el('p', { class: 'empty' }, 'Нажмите на звёздочку у варианта маршрута, чтобы сохранить его здесь.'));
+  }
+
+  function renderTracks() {
     layers.explored.clearLayers();
     const color = cssVar('map-explored');
-    const list = $('#exploredList');
-    list.innerHTML = '';
-    for (const en of store.explored) {
-      for (const ln of en.lines) {
+    for (const t of tracks.items) {
+      for (const ln of t.lines) {
         layers.explored.addLayer(L.polyline(ln, { color, weight: 2.5, opacity: 0.9, lineCap: 'round', lineJoin: 'round', interactive: false }));
       }
     }
-    for (const en of store.explored.slice().reverse()) {
+    const list = $('#exploredList');
+    list.innerHTML = '';
+    for (const t of tracks.items.slice().reverse()) {
+      const meta = [fmtKm(t.km || 0) + ' км'];
+      if (t.newKm !== undefined) meta.push(fmtKm(t.newKm) + ' км новых');
+      meta.push(KIND[t.kind] || '');
       list.appendChild(el('div', { class: 'item' },
-        el('div', { class: 'grow' },
-          el('div', { class: 'name' }, en.name),
-          el('div', { class: 'meta' }, fmtKm(en.km || 0) + ' км · ' + (KIND[en.kind] || '') + ' · ' + (en.added || ''))),
-        el('button', { class: 'btn small', type: 'button', onclick: () => { fitLines([en]); app.sheet.peek(); } }, 'Показать'),
+        el('div', { class: 'grow' }, renameable(t, tracks), el('div', { class: 'meta' }, meta.join(' · '))),
+        el('button', { class: 'btn small', type: 'button', onclick: () => { fitLines(t.lines); app.sheet.peek(); } }, 'Показать'),
         el('button', {
-          class: 'btn small ghost', type: 'button', 'aria-label': 'Удалить ' + en.name,
-          onclick: () => { store.explored = store.explored.filter((x) => x.id !== en.id); render(); save(); }
+          class: 'btn small ghost', type: 'button', 'aria-label': 'Удалить ' + t.name,
+          onclick: () => { tracks.remove(t.id); render(); }
         }, 'Удалить')));
     }
-    if (!store.explored.length) list.appendChild(el('p', { class: 'empty' }, 'Здесь появятся ваши пробежки.'));
+    if (!tracks.items.length) list.appendChild(el('p', { class: 'empty' }, 'Загрузите GPX своих пробежек или отметьте улицы вручную.'));
+  }
+
+  function render() {
+    renderFavorites();
+    renderTracks();
     app.emit('explored');
   }
 
-  function addExplored(name, kind, lines) {
-    const clean = lines.map((l) => Core.simplifyDP(l, 4).map(round5)).filter((l) => l.length > 1);
-    if (!clean.length) return false;
-    store.explored.push({ id: uid(), name, kind, added: new Date().toLocaleDateString('ru-RU'), lines: clean, km: lineKm(clean) });
-    render(); save();
-    return true;
+  /* Заметное место на треке, если рядом уже загружены места из OSM. */
+  function placeOn(lines) {
+    const g = S.graph;
+    if (!g || !g.pois || !g.pois.length) return null;
+    const seen = [];
+    for (const line of lines) {
+      for (const p of Core.resample(line, 40)) {
+        const i = Core.poiNear(g, Core.px(p[1]), Core.py(p[0]), 70);
+        if (i >= 0 && !seen.includes(g.pois[i])) seen.push(g.pois[i]);
+      }
+    }
+    const poi = Core.notablePlace(seen);
+    return poi ? Core.placeName(poi) : null;
   }
-  app.addExplored = addExplored;
-  app.renderExplored = render;
+
+  /* Добавляет трек; возвращает запись или null, если в нём нет линий. */
+  function addTrack(kind, lines, opts = {}) {
+    const clean = lines.map((l) => Core.simplifyDP(l, 4).map(round5)).filter((l) => l.length > 1);
+    if (!clean.length) return null;
+    const km = lineKm(clean);
+    const date = opts.date || Date.now();
+    const entry = {
+      id: uid(), kind, lines: clean, km, created: Date.now(), date,
+      newKm: Core.newDistance(clean, allLines()),
+      name: opts.name || Core.trackTitle(date, km, placeOn(clean)), autoName: !opts.name
+    };
+    tracks.add(entry);
+    render();
+    return entry;
+  }
+  app.addTrack = addTrack;
+  app.renderLibrary = render;
+
+  function showSummary(added, failed) {
+    const box = $('#importSummary');
+    box.innerHTML = '';
+    if (!added.length) { box.hidden = true; return; }
+    const total = added.reduce((s, t) => s + t.km, 0), fresh = added.reduce((s, t) => s + t.newKm, 0);
+    box.append(
+      el('div', { class: 'head' },
+        el('span', { class: 'lbl' }, added.length === 1 ? 'Трек загружен' : 'Загружено треков: ' + added.length),
+        el('button', { class: 'btn small ghost', type: 'button', onclick: () => { box.hidden = true; } }, 'Скрыть')),
+      el('div', { class: 'figs' },
+        el('div', null, el('div', { class: 'big' }, fmtKm(total) + ' км'), el('div', { class: 'muted' }, 'всего')),
+        el('div', null, el('div', { class: 'big own' }, '+' + fmtKm(fresh) + ' км'), el('div', { class: 'muted' }, 'новых улиц'))),
+      el('div', { class: 'files' }, added.map((t) => t.name).join('; ') + (failed ? '. Без трека: ' + failed : '')));
+    box.hidden = false;
+  }
 
   $('#importGpx').addEventListener('click', () => $('#gpxFiles').click());
   $('#gpxFiles').addEventListener('change', async (e) => {
     const files = Array.from(e.target.files || []);
-    let ok = 0, empty = 0;
+    const added = [];
+    let failed = 0;
     for (const f of files) {
       try {
         const gpx = Core.parseGPX(await f.text());
-        if (addExplored(gpx.name || f.name.replace(/\.gpx$/i, ''), 'gpx', gpx.tracks)) ok++; else empty++;
-      } catch (err) { empty++; }
+        const t = addTrack('gpx', gpx.tracks, { date: gpx.time ? Date.parse(gpx.time) : f.lastModified });
+        if (t) added.push(t); else failed++;
+      } catch (err) { failed++; }
     }
     e.target.value = '';
-    toast('Загружено файлов: ' + ok + (empty ? ', без трека: ' + empty : ''));
-    if (ok) fitLines(store.explored.slice(-ok));
+    if (!added.length) { toast('В файлах не нашлось трека.'); return; }
+    showSummary(added, failed);
+    fitLines(added.flatMap((t) => t.lines));
   });
 
   /* ручная разметка: между кликами линия ложится по пешеходным улицам, если граф загружен */
@@ -101,8 +192,9 @@ export function initLibraryPanel(app) {
     },
     ok() {
       if (draft.coords.length < 2) { toast('Поставьте хотя бы две точки вдоль улицы.'); return; }
-      addExplored('Отметка ' + new Date().toLocaleDateString('ru-RU'), 'manual', [draft.coords.slice()]);
+      const t = addTrack('manual', [draft.coords.slice()]);
       app.setMode(null);
+      if (t) toast('Отмечено ' + fmtKm(t.km) + ' км, из них новых ' + fmtKm(t.newKm) + ' км.');
     },
     leave: clearDraft
   });
@@ -112,6 +204,7 @@ export function initLibraryPanel(app) {
       : 'Кликайте вдоль пройденного пути. После первого построения маршрута линия будет прилипать к улицам');
   });
 
-  app.on('theme', render);
+  app.on('theme', renderTracks);
+  app.on('favorites', renderFavorites);
   render();
 }

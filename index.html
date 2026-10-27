@@ -119,16 +119,20 @@
       </div>
       <p class="status" id="status" role="status"></p>
       <div class="results" id="results"></div>
+      <button class="btn" id="more" type="button" hidden>Ещё варианты</button>
     </section>
 
     <!-- ===== Библиотека ===== -->
     <section class="tabpane" id="pane-library" role="tabpanel" aria-labelledby="tab-library" hidden>
-      <p class="hint">Загрузите GPX своих пробежек или отметьте улицы вручную. Пройденное видно на карте, а ползунок «Новизна улиц» ведёт по новым местам или по знакомым.</p>
       <div class="row">
         <button class="btn own" id="importGpx" type="button">Загрузить GPX</button>
         <button class="btn" id="drawBtn" type="button">Отметить вручную</button>
         <input class="hidden-input" id="gpxFiles" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple tabindex="-1">
       </div>
+      <div class="summary" id="importSummary" hidden></div>
+      <h2 class="sec">Избранные маршруты</h2>
+      <div class="list" id="favList"></div>
+      <h2 class="sec">Пробежки</h2>
       <div class="list" id="exploredList"></div>
     </section>
 

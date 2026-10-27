@@ -65,7 +65,9 @@ function unesc(s) {
 }
 
 function parseGPX(text) {
-  var tracks = [], waypoints = [], name = '';
+  var tracks = [], waypoints = [], name = '', time = null;
+  var mt = /<trkpt\b[\s\S]*?<time>([^<]+)<\/time>/.exec(text) || /<metadata[^>]*>[\s\S]*?<time>([^<]+)<\/time>/.exec(text);
+  if (mt && !isNaN(Date.parse(mt[1].trim()))) time = mt[1].trim();
   var mn = /<metadata[^>]*>[\s\S]*?<name>([\s\S]*?)<\/name>/.exec(text) || /<trk[^>]*>[\s\S]*?<name>([\s\S]*?)<\/name>/.exec(text);
   if (mn) name = unesc(mn[1]).trim();
   var ptRe = /<(trkpt|rtept)\b([^>]*?)\/?>/g;
@@ -86,7 +88,7 @@ function parseGPX(text) {
     var nn = /<name>([\s\S]*?)<\/name>/.exec(wm[2]);
     if (isFinite(wl) && isFinite(wo)) waypoints.push({ lat: wl, lon: wo, name: nn ? unesc(nn[1]).trim() : '' });
   }
-  return { name: name, tracks: tracks, waypoints: waypoints };
+  return { name: name, tracks: tracks, waypoints: waypoints, time: time };
 }
 
 /* зона, уже загруженная ранее, покрывает новую? (стадион вокруг отрезка) */

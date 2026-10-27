@@ -17,9 +17,9 @@ export function initProgressPanel(app) {
   const { map, layers, S } = app;
 
   function renderStats() {
-    const km = store.explored.reduce((s, en) => s + (en.km || 0), 0);
+    const km = app.tracks.items.reduce((s, t) => s + (t.km || 0), 0);
     $('#progKm').textContent = fmtKm(km);
-    $('#progCount').textContent = String(store.explored.length);
+    $('#progCount').textContent = String(app.tracks.items.length);
   }
 
   function renderOsm() {

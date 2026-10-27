@@ -3,6 +3,7 @@ import { toast } from '../ui/dom.js';
 
 const STORE_KEY = 'rundom.v1';
 
+/* explored — треки до этапа 2; при запуске переезжают в IndexedDB. */
 const DEFAULTS = {
   explored: [], A: null, B: null,
   prefs: {
