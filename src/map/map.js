@@ -42,6 +42,9 @@ export function createMap() {
     .catch((e) => { console.error(e); toast('Карта не загрузилась. Обновите страницу.'); });
   const setTiles = () => impl?.restyle();
 
+  /* холст по умолчанию (неинтерактивные линии) лежит над зонами и тупиками и забирал щелчки по ним */
+  map.getPane('overlayPane').style.pointerEvents = 'none';
+
   /* зоны и закрытые отрезки — SVG под линиями маршрута: штриховка и цвета из CSS */
   map.createPane('zones');
   map.getPane('zones').style.zIndex = 380;

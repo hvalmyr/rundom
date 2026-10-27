@@ -144,3 +144,26 @@ export function renameable(name, onRename) {
   });
   return btn;
 }
+
+/* плавное раскрытие details.more: высота едет от заголовка до содержимого и обратно */
+export function smoothDetails(root = document) {
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)');
+  root.querySelectorAll('details.more').forEach((d) => {
+    const sum = d.querySelector('summary');
+    let anim = null;
+    sum.addEventListener('click', (e) => {
+      if (still.matches) return;
+      e.preventDefault();
+      /* посреди анимации нажатие разворачивает её в обратную сторону */
+      const closing = d.dataset.dir ? d.dataset.dir === 'open' : d.open;
+      const from = d.getBoundingClientRect().height;
+      if (anim) anim.cancel();
+      d.open = true;
+      d.dataset.dir = closing ? 'close' : 'open';
+      const border = d.offsetHeight - d.clientHeight, full = d.scrollHeight + border, closed = sum.getBoundingClientRect().height + border;
+      d.style.overflow = 'hidden';
+      const a = anim = d.animate({ height: [from + 'px', (closing ? closed : full) + 'px'] }, { duration: 240, easing: 'cubic-bezier(.3, .7, .2, 1)' });
+      a.onfinish = () => { if (anim !== a) return; anim = null; d.open = !closing; d.style.overflow = ''; delete d.dataset.dir; };
+    });
+  });
+}

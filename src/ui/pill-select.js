@@ -39,6 +39,7 @@ export function pillSelect(root, { options, selected, name, toggle, placeholder 
     if (search.value) { search.value = ''; openList(); } else paintList();
   }
   search.addEventListener('focus', openList);
+  search.addEventListener('click', () => { if (sug.hidden) openList(); });
   search.addEventListener('input', openList);
   search.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -56,7 +57,10 @@ export function pillSelect(root, { options, selected, name, toggle, placeholder 
       if (!sug.hidden) paintList();
     }
   });
-  search.addEventListener('blur', () => setTimeout(() => { if (!root.contains(document.activeElement)) closeList(); }, 120));
+  /* список закрывается, когда фокус ушёл из поиска (в том числе Tab на соседние кнопки) или нажали мимо поля — например, по карте:
+     карта гасит mousedown, и поле фокус не теряет */
+  root.addEventListener('focusout', (e) => { if (e.relatedTarget !== search && !sug.contains(e.relatedTarget)) closeList(); });
+  document.addEventListener('pointerdown', (e) => { if (!sug.hidden && !root.contains(e.target)) closeList(); }, true);
   /* щелчок по пустому месту поля — в поиск */
   root.querySelector('.ps-box').addEventListener('click', (e) => { if (!e.target.closest('button, input')) search.focus(); });
 

@@ -132,7 +132,9 @@ export function initRoutePanel(app) {
           renderKm(); save(); app.emit('km');
           toast('Дистанция ' + fmtNum(km) + ' км удалена.');
         }
-      }, armed ? el('span', { class: 'arm-row' }, el('span', { class: 'x', 'aria-hidden': 'true' }, '×'), fmtNum(km)) : fmtNum(km));
+      }, armed ? [el('span', { class: 'arm-row' }, el('span', { class: 'x', 'aria-hidden': 'true' }, '×'), fmtNum(km)),
+        /* отсчёт до отмены — линия по всей рамке пилюли */
+        el('span', { class: 'arm-ring', 'aria-hidden': 'true', html: '<svg><rect pathLength="100"/></svg>' })] : fmtNum(km));
       if (armed) chip.addEventListener('blur', () => setTimeout(() => { if (!$('#kmChips').contains(document.activeElement)) disarm(); }, 0));
       box.appendChild(chip);
     }
@@ -430,7 +432,7 @@ export function initRoutePanel(app) {
               ? 'Строго внутри районов (' + direction.label + ') кольцо ' + fmtNum(prefs.km) + ' км не помещается. Попробуйте «Примерно» или уменьшите дистанцию.'
               : 'Кольцо ' + fmtNum(prefs.km) + ' км не дотягивается дальней точкой до районов: ' + direction.label + '. Измените дистанцию или районы.'), 'warn');
         } else {
-          say('Не удалось подобрать маршрут нужной длины' + (limits ? ' с учётом ' + limits : '') + '. Измените дистанцию, увеличьте допуск' +
+          say('Не удалось подобрать маршрут нужной длины' + (limits ? ' с учётом ' + limits : '') + '. Измените дистанцию, увеличьте отклонение' +
             (prefs.allowRepeats ? '' : ', разрешите повторы улиц') + ' или сдвиньте точки.', 'warn');
         }
       } else {
@@ -438,7 +440,7 @@ export function initRoutePanel(app) {
         if (res.approx) {
           const best = S.routes.reduce((a, r) => (r.err < a.err ? r : a));
           if (S.routes.every((r) => !r.off)) msg += ' Совсем без повторов улиц не получилось: показаны варианты с наименьшими повторами.';
-          else msg += ' Точно в допуск' + (limits ? ' с учётом ' + limits : '') + ' не попали: ближайший вариант ' + fmtKm(best.length) + ' км.';
+          else msg += ' В пределах отклонения' + (limits ? ' с учётом ' + limits : '') + ' вариантов нет: ближайший — ' + fmtKm(best.length) + ' км.';
         }
         if (lostExits) msg += ' Выходов без пути к улицам: ' + lostExits + '.';
         if (res.unreachable.length) msg += ' ' + unreachableText(res.unreachable, Lm) + ' Эти районы пропущены.';
@@ -637,6 +639,11 @@ export function initRoutePanel(app) {
     toast('GPX сохранён. Откройте его в Organic Maps или другом навигаторе.');
   }
   app.downloadRoute = downloadRoute;
+  /* в «Библиотеке» построенные варианты не мешают: убираются с карты и возвращаются на вкладке маршрута */
+  app.on('tab', () => {
+    if (app.tab === 'library' && !S.lineId && S.routeLayers) app.hideLine();
+    else if (app.tab === 'route' && !S.lineId && !S.routeLayers && S.routes.length) drawRoutes(false);
+  });
 
   app.on('theme', () => drawRoutes(false));
   app.on('start', renderAB);

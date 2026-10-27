@@ -42,15 +42,21 @@ function toGPX(o) {
     lines.push('  <wpt lat="' + w.lat.toFixed(6) + '" lon="' + w.lon.toFixed(6) + '"><name>' + esc(w.name) + '</name>' +
       (w.desc ? '<desc>' + esc(w.desc) + '</desc>' : '') + '</wpt>');
   });
-  lines.push('  <trk>');
-  lines.push('    <name>' + esc(o.name || 'Маршрут') + '</name>');
-  if (o.desc) lines.push('    <desc>' + esc(o.desc) + '</desc>');
-  lines.push('    <trkseg>');
-  o.coords.forEach(function (p) {
-    lines.push('      <trkpt lat="' + p[0].toFixed(6) + '" lon="' + p[1].toFixed(6) + '"></trkpt>');
+  /* o.tracks = [{name, desc?, segs: [[lat, lon]…]}] — несколько треков в одном файле; иначе один из o.coords */
+  var trks = o.tracks || [{ name: o.name || 'Маршрут', desc: o.desc, segs: [o.coords] }];
+  trks.forEach(function (t) {
+    lines.push('  <trk>');
+    lines.push('    <name>' + esc(t.name) + '</name>');
+    if (t.desc) lines.push('    <desc>' + esc(t.desc) + '</desc>');
+    t.segs.forEach(function (seg) {
+      lines.push('    <trkseg>');
+      seg.forEach(function (p) {
+        lines.push('      <trkpt lat="' + p[0].toFixed(6) + '" lon="' + p[1].toFixed(6) + '"></trkpt>');
+      });
+      lines.push('    </trkseg>');
+    });
+    lines.push('  </trk>');
   });
-  lines.push('    </trkseg>');
-  lines.push('  </trk>');
   lines.push('</gpx>');
   return lines.join('\n');
 }

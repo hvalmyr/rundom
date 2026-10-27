@@ -41,10 +41,12 @@ export function initCoverageMap(app) {
   const lineR = L.canvas({ pane: pane('covLines', 388), padding: 0.3 });
   /* холст улиц лежит над районами: без этого он забирает щелчки, и район не выбрать */
   map.getPane('covLines').style.pointerEvents = 'none';
+  /* при выбранном районе всё вокруг него приглушено: и заливка, и улицы, и парки */
+  const dimR = L.svg({ pane: pane('covDim', 420), padding: 0.5 });
   const topR = L.svg({ pane: pane('covTop', 430), padding: 0.3 });
   /* значки мест — в своей панели: обычная панель маркеров во вкладке скрыта */
   pane('covMarks', 640);
-  const G = { base: L.layerGroup(), fill: L.layerGroup(), lines: L.layerGroup(), sel: L.layerGroup(), places: L.layerGroup() };
+  const G = { base: L.layerGroup(), fill: L.layerGroup(), lines: L.layerGroup(), sel: L.layerGroup(), places: L.layerGroup(), dim: L.layerGroup() };
 
   let active = false, built = false, selected = null, tab = 'streets', sortBy = 'share', streetShown = 60;
   let placeCat = 'all', placeDists = [], placeShown = 12, dCat = 'all', distShown = 8, focus = null, segFrom = null;
@@ -110,6 +112,18 @@ export function initCoverageMap(app) {
         (id === selected ? ' sel' : selected ? ' dim' : ''));
     }
     if (selected && polys.get(selected)) polys.get(selected).bringToFront();
+    paintDim();
+  }
+  let dimFor = null;
+  function paintDim() {
+    if (dimFor === selected) return;
+    dimFor = selected;
+    G.dim.clearLayers();
+    const poly = selected && polys.get(selected);
+    if (!poly) return;
+    const ll = poly.getLatLngs();
+    const outer = L.LineUtil.isFlat(ll[0]) ? [ll[0]] : ll.map((part) => part[0]);
+    G.dim.addLayer(L.polygon([[[-85, -180], [-85, 180], [85, 180], [85, -180]], ...outer], { renderer: dimR, className: 'cov-dim', interactive: false }));
   }
 
   /* ---------- улицы ---------- */
@@ -401,7 +415,6 @@ export function initCoverageMap(app) {
     const visited = Object.keys(store.visited);
     const total = I.d.reduce((s, d) => s + d.ob + d.pk, 0);
     const runs = app.tracks.items, runKm = runs.reduce((s, t) => s + (t.km || 0), 0), freshKm = runs.reduce((s, t) => s + (t.newKm || 0), 0);
-    const kmTxt = (km) => (Math.round(km * 10) / 10).toLocaleString('ru-RU');
     const card = (label, big, sub, attrs) => el(attrs ? 'button' : 'div', { class: 'ccard', ...attrs },
       el('div', { class: 'muted' }, label), el('div', { class: 'cbig' }, big), el('div', { class: 'muted' }, sub));
     $('#covCards').replaceChildren(
@@ -411,7 +424,8 @@ export function initCoverageMap(app) {
         type: 'button', 'aria-expanded': String(catsOpen), 'aria-controls': 'covCats', title: 'Места по типам',
         onclick: () => { catsOpen = !catsOpen; renderCards(); }
       }),
-      card('Пробежки', String(runs.length), runs.length ? kmTxt(runKm) + ' км · ' + kmTxt(freshKm) + ' км новых улиц' : 'загрузите трек в «Библиотеке»'),
+      /* длины треков хранятся в метрах; «впервые» — там, где не проходила ни одна более ранняя пробежка */
+      card('Пробежки', String(runs.length), runs.length ? fmtKm(runKm) + ' км всего · ' + fmtKm(freshKm) + ' км впервые' : 'загрузите трек в «Библиотеке»'),
       catsOpen ? catCards() : '');
   }
   /* места по типам: сколько встречено и исследовано из всех; считается по разобранным файлам районов */

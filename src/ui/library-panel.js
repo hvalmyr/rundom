@@ -2,7 +2,7 @@
 import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { cssVar, divIcon } from '../map/map.js';
-import { $, el, fmtKm, uid, round5, toast, renameable, iconBtn, removeBtn } from './dom.js';
+import { $, el, fmtKm, uid, round5, toast, renameable, iconBtn, removeBtn, download } from './dom.js';
 
 const KIND = { gpx: 'GPX', route: 'маршрут', manual: 'вручную' };
 const fmtDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
@@ -68,6 +68,7 @@ export function initLibraryPanel(app) {
       if (t.newKm !== undefined) meta.push('+' + fmtKm(t.newKm) + ' новых');
       if (KIND[t.kind]) meta.push(KIND[t.kind]);
       return row(t, tracks, { lines: t.lines }, meta.join(' · '), [
+        iconBtn('download', 'Скачать GPX', () => exportTracks([t], t.name), true),
         removeBtn('Удалить ' + t.name, () => {
           if (S.lineId === t.id) app.hideLine();
           tracks.remove(t.id); render();
@@ -76,7 +77,19 @@ export function initLibraryPanel(app) {
       ]);
     }), 'Загрузите GPX своих пробежек или отметьте улицы вручную.');
     $('#trackCount').textContent = tracks.items.length || '';
+    $('#exportTracks').hidden = !tracks.items.length;
   }
+  /* пробежки — обратно в GPX: одна или все сразу, каждая своим треком */
+  function exportTracks(list, name) {
+    const gpx = Core.toGPX({
+      name: name || 'Пробежки rundom',
+      tracks: list.map((t) => ({ name: t.name, desc: fmtDate(t.date || t.created) + ', ' + fmtKm(t.km || 0) + ' км', segs: t.lines }))
+    });
+    const file = list.length === 1 ? 'rundom-' + fmtDate(list[0].date || list[0].created).replace(/\s+/g, '-') + '.gpx' : 'rundom-probezhki.gpx';
+    download(file, gpx, 'application/gpx+xml');
+    toast(list.length === 1 ? 'GPX пробежки сохранён.' : 'Сохранено пробежек: ' + list.length + ', одним файлом GPX.');
+  }
+  $('#exportTracks').addEventListener('click', () => exportTracks(tracks.items.slice().sort((a, b) => (a.date || a.created) - (b.date || b.created))));
 
   function render() {
     renderFavorites();

@@ -6,7 +6,7 @@ import './styles/app.css';
 import { store, save } from './storage/store.js';
 import { collection } from './storage/db.js';
 import { createMap } from './map/map.js';
-import { $, toast, uid } from './ui/dom.js';
+import { $, toast, uid, smoothDetails } from './ui/dom.js';
 import { initModes } from './ui/modes.js';
 import { initSheet } from './ui/sheet.js';
 import { initRoutePanel } from './ui/route-panel.js';
@@ -89,6 +89,7 @@ $('#mtToggle').addEventListener('click', () => { store.layers.legendOpen = !stor
 syncLegend();
 
 initSheet(app);
+smoothDetails();
 initModes(app);
 initHome(app);
 initBlocks(app);
