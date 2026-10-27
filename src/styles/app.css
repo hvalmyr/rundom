@@ -86,8 +86,9 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .btn.primary:hover { background: var(--action-strong); border-color: var(--action-strong); color: var(--on-action); }
 .btn.primary:focus-visible { outline-color: var(--ink); }
-.btn.own { background: var(--action); border-color: var(--action); color: var(--on-action); }
-.btn.own:hover { background: var(--action-strong); border-color: var(--action-strong); }
+/* own в покое — белая, как обычная; кармином заливается при наведении и фокусе */
+.btn.own:hover, .btn.own:focus-visible { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.btn.own:active { background: var(--action-strong); border-color: var(--action-strong); }
 .btn.ghost { background: none; border-color: transparent; color: var(--ink-muted); }
 .btn.ghost:hover { color: var(--ink); }
 .btn.big { width: 100%; padding: 0 16px; font-weight: 600; font-size: 15px; }
@@ -114,7 +115,13 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
 #kmChips .chip::after, .kmin::after { content: "00,0"; height: 0; visibility: hidden; overflow: hidden; }
 .chip[aria-pressed="true"] { background: var(--action-tint); border-color: var(--action); color: var(--action-strong); }
 .chip.target { background: var(--carmine-tint); border-color: var(--carmine); color: var(--carmine-strong); }
-.chip.add { border-style: dashed; color: var(--ink-muted); }
+.chip.add { position: relative; border-color: transparent; color: var(--ink-muted); }
+/* пунктир с длинным штрихом 6/4: у border-style: dashed длину штриха не задать, рисуем маской в цвет токена */
+.chip.add::before {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; background: var(--line-strong);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' rx='14' fill='none' stroke='%23000' stroke-width='2' stroke-dasharray='6 4'/%3E%3C/svg%3E") 0 0 / 100% 100%; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' rx='14' fill='none' stroke='%23000' stroke-width='2' stroke-dasharray='6 4'/%3E%3C/svg%3E") 0 0 / 100% 100%;
+}
+.chip.add:hover::before { background: var(--ink); }
 .kmin { border-radius: var(--radius-pill); border: 1px solid var(--line-strong); background: var(--surface); cursor: text; }
 .kmin:hover { border-color: var(--ink); }
 .kmin:focus-within { border-color: var(--focus); }
