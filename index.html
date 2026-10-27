@@ -163,7 +163,7 @@
           </div>
           <label class="check"><input type="checkbox" id="allowRepeats"><span>Разрешить повторы улиц<small>Без галочки кольцо не проходит одну улицу дважды, считая обе её стороны</small></span></label>
           <label class="check"><input type="checkbox" id="avoidSteps"><span>Без лестниц</span></label>
-          <label class="check"><input type="checkbox" id="strictGates"><span>Не идти через частные шлагбаумы<small>Обычно шлагбаум перекрывает только машины, а пешеход обходит его сбоку, поэтому генератор через него ведёт. Включите, если во дворах такие шлагбаумы (в OSM — access=private или no) на деле закрыты и для пешеходов</small></span></label>
+          <label class="check"><input type="checkbox" id="strictGates"><span>Не идти через частные шлагбаумы<small>Обычно шлагбаум перекрывает только машины, а пешеход обходит его сбоку, поэтому маршрут через него идёт. Включите, если во дворах такие шлагбаумы закрыты и для пешеходов</small></span></label>
           <div class="setting">
             <label for="kmStep">Метки</label>
             <label class="unit"><input id="kmStep" class="num" type="number" inputmode="numeric" min="100" max="10000" step="100" autocomplete="off" aria-describedby="kmStepHint"><span>м</span></label>
@@ -196,7 +196,11 @@
       <button class="btn primary big" id="go" type="button">Построить маршруты</button>
       <button class="btn big" id="cancel" type="button" hidden>Отменить</button>
       <div class="progress" id="prog" hidden>
-        <div class="braid" aria-hidden="true"><div class="fill" id="braidFill"></div></div>
+        <svg class="braid" viewBox="0 0 400 18" preserveAspectRatio="none" aria-hidden="true">
+          <path class="track" d="M2 9H398"/>
+          <path class="a" id="braidA"/>
+          <path class="b" id="braidB"/>
+        </svg>
       </div>
       <p class="status" id="status" role="status"></p>
       <div class="results" id="results"></div>
@@ -278,8 +282,19 @@
     </div>
     <div class="field">
       <span class="lbl">Как строятся маршруты</span>
-      <p class="hint">Всё считается в браузере: граф улиц OpenStreetMap и поиск пути A*. Закрытые ворота, частные и служебные проезды в граф не попадают. Данные карты © участники OpenStreetMap.</p>
-      <p class="hint" id="dataDate">Данные OpenStreetMap для покрытия улиц загружаются…</p>
+      <p class="hint">Маршруты считаются прямо в браузере по карте улиц OpenStreetMap, путь между точками ищет алгоритм A*. Закрытые ворота, частные и служебные проезды маршрут обходит.</p>
+      <p class="hint" id="dataDate">Дата данных карты загружается…</p>
+    </div>
+    <div class="field">
+      <span class="lbl">Лицензии</span>
+      <ul class="licenses">
+        <li><strong>Карта, улицы, места</strong> — © участники <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, лицензия <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">ODbL 1.0</a></li>
+        <li><strong>Поиск адреса</strong> — <a href="https://nominatim.org" target="_blank" rel="noopener">Nominatim</a>, данные OpenStreetMap (ODbL)</li>
+        <li><strong>Описания мест и районов</strong> — <a href="https://ru.wikipedia.org" target="_blank" rel="noopener">Википедия</a>, лицензия <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ru" target="_blank" rel="noopener">CC BY-SA 4.0</a>; данные <a href="https://www.wikidata.org" target="_blank" rel="noopener">Викиданных</a> — CC0</li>
+        <li><strong>Фотографии мест</strong> — <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a>; автор и лицензия указаны под каждым фото</li>
+        <li><strong>Карта в браузере</strong> — <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a> (BSD-2-Clause), <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL JS</a> (BSD-3-Clause), <a href="https://github.com/maplibre/maplibre-gl-leaflet" target="_blank" rel="noopener">MapLibre GL Leaflet</a> (ISC)</li>
+        <li><strong>Шрифты</strong> — <a href="https://rsms.me/inter/" target="_blank" rel="noopener">Inter и Inter Tight</a>, лицензия <a href="https://openfontlicense.org" target="_blank" rel="noopener">SIL OFL 1.1</a></li>
+      </ul>
     </div>
   </form>
 </dialog>

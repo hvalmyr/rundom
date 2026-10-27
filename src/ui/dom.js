@@ -58,6 +58,13 @@ export function removeBtn(label, onConfirm) {
   return b;
 }
 
+/* Текст ошибки для человека: свои сообщения — как есть, технические (сеть, HTTP, сбои кода) — понятной фразой. */
+export function userMessage(e, fallback) {
+  const m = (e && e.message) || '';
+  if (/[А-Яа-яё]/.test(m) && !/HTTP|Тайл/.test(m)) return m;
+  if (/HTTP|fetch|network|Load failed|Тайл/i.test(m)) return 'Не удалось загрузить данные. Проверьте подключение к интернету и попробуйте ещё раз.';
+  return fallback;
+}
 export const tick = () => new Promise((r) => setTimeout(r, 0));
 export const fmt1 = (x) => (Math.round(x * 10) / 10).toFixed(1).replace('.', ',');
 export const fmtKm = (m) => fmt1(m / 1000);

@@ -185,26 +185,17 @@ details.more[open] summary::after { content: "−"; }
 .status.warn { color: var(--danger); }
 .status.warn::before { content: "! "; font-weight: 700; }
 
-/* ---------- прогресс: полоса растёт с этапами, по ней бегут косые штрихи ---------- */
 .progress[hidden] { display: none; }
-.braid { position: relative; height: 6px; border-radius: var(--radius-pill); background: var(--surface-sunk); overflow: hidden; }
-.braid .fill {
-  position: absolute; inset: 0 auto 0 0; width: 4%; border-radius: inherit; background-color: var(--carmine);
-  background-image: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--paper) 35%, transparent) 6px 12px);
-  background-size: 17px 100%;
-  transition: width .5s cubic-bezier(.3, .7, .2, 1);
-}
-/* пока долго ждём сеть, полоса не стоит: по пустой части дорожки бежит блик */
-.braid.wait::after {
-  content: ""; position: absolute; top: 0; bottom: 0; width: 30%; border-radius: inherit;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--carmine) 45%, transparent), transparent);
-  animation: braid-wait 1.4s ease-in-out infinite;
-}
+.braid { display: block; width: 100%; height: 18px; overflow: visible; }
+.braid path { fill: none; stroke-width: 3; stroke-linecap: round; }
+.braid .track { stroke: var(--surface-sunk); }
+.braid .a { stroke: var(--petrol); stroke-dasharray: 30 10; }
+.braid .b { stroke: var(--carmine); stroke-dasharray: 30 10; }
 @media (prefers-reduced-motion: no-preference) {
-  .braid .fill { animation: braid-run .6s linear infinite; }
+  .braid .a, .braid .b { animation: tie 1.6s cubic-bezier(.6, 0, .3, 1) infinite; }
+  .braid .b { animation-delay: -.8s; }
 }
-@keyframes braid-run { to { background-position: 17px 0; } }
-@keyframes braid-wait { from { left: -30%; } to { left: 100%; } }
+@keyframes tie { to { stroke-dashoffset: -40; } }
 
 /* ---------- карточки маршрутов ---------- */
 .results { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -673,3 +664,8 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .about-place .site { font-size: 12.5px; }
 #placeDist { width: 100%; }
 .pop .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* лицензии в настройках */
+.licenses { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 18px; color: var(--ink-muted); }
+.licenses strong { color: var(--ink); font-weight: 500; }
+.licenses a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }

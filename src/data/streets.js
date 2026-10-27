@@ -108,7 +108,11 @@ export async function loadStreets(need, signal, say) {
   const box = boxOf(need);
   const ix = await tileIndex();
   const keys = ix ? Core.tilesInBox(box, ix.grid) : [];
-  if (ix && keys.every((k) => ix.cover.has(k))) {
+  /* у края выгрузки (восток Москвы за МКАД) часть зоны без тайлов: если старт и финиш в покрытии
+     и почти вся зона есть, берём тайлы — край просто без улиц, а не минута ожидания Overpass */
+  const inCover = (p) => ix && ix.cover.has(Core.tileKey(...Core.tileOf(p[0], p[1], ix.grid)));
+  if (ix && (keys.every((k) => ix.cover.has(k)) ||
+    (inCover(need.A) && inCover(need.B) && keys.filter((k) => ix.have.has(k)).length >= 0.75 * keys.length))) {
     say('Загружаю улицы…');
     try {
       return { ...(await fromTiles(ix, keys, signal)), source: 'tiles' };
@@ -124,7 +128,7 @@ export async function loadStreets(need, signal, say) {
     return { ...fromPacked(hit), source: 'cache', created: hit.created };
   }
 
-  say('Загружаю улицы из OpenStreetMap в радиусе ' + (need.R / 1000).toFixed(1).replace('.', ',') + ' км. Это может занять до минуты…');
+  say('Загружаю улицы в радиусе ' + (need.R / 1000).toFixed(1).replace('.', ',') + ' км вокруг старта. Это может занять до минуты…');
   const area = Core.aroundStr(need.R, need.A, need.B);
   /* парки не обязательны: их ошибка не роняет загрузку; отмену ловит запрос улиц и проверка ниже */
   const ctxP = overpass(Core.contextQuery(area), signal).catch(() => null);

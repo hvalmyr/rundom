@@ -4,7 +4,7 @@ import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { loadStreets } from '../data/streets.js';
 import { divIcon } from '../map/map.js';
-import { $, el, tick, fmtKm, fmtNum, fmtTime, toast, download, syncSeg, uid, ICON } from './dom.js';
+import { $, el, tick, fmtKm, fmtNum, fmtTime, toast, download, syncSeg, uid, ICON, userMessage } from './dom.js';
 
 export function initRoutePanel(app) {
   const { map, layers, S } = app;
@@ -276,9 +276,16 @@ export function initRoutePanel(app) {
   const say = (msg, kind) => { const s = $('#status'); s.textContent = msg || ''; s.className = 'status' + (kind ? ' ' + kind : ''); };
 
   /* Полоса прогресса: длина — доля работы. Пока ждём сеть (wait), полоса не стоит: по дорожке бежит блик. */
-  function braid(frac, wait = false) {
-    $('#braidFill').style.width = (100 * Math.max(0.04, Math.min(1, frac))).toFixed(1) + '%';
-    $('#prog .braid').classList.toggle('wait', wait);
+  function braid(frac) {
+    const end = 2 + 396 * Math.max(0.04, Math.min(1, frac));
+    let a = 'M2 9', b = 'M2 9';
+    for (let x = 2, up = true; x < end; x += 30, up = !up) {
+      const x2 = Math.min(end, x + 30), mid = (x + x2) / 2;
+      a += ` Q ${mid} ${up ? 1 : 17} ${x2} 9`;
+      b += ` Q ${mid} ${up ? 17 : 1} ${x2} 9`;
+    }
+    $('#braidA').setAttribute('d', a);
+    $('#braidB').setAttribute('d', b);
   }
   function setBusy(b) {
     S.busy = b;
@@ -320,7 +327,7 @@ export function initRoutePanel(app) {
       const R = Core.loadRadius(d, Lm, 5000);
       const need = { A: [A.lat, A.lon], B: [B.lat, B.lon], R };
       if (!S.net || !Core.regionContains(S.net.region, need)) {
-        braid(0.08, true);
+        braid(0.08);
         const got = await loadStreets(need, ac.signal, say);
         if (!got.parsed.ways.length) throw new Error('В этой зоне не нашлось улиц.');
         S.net = { region: need, parsed: got.parsed, ctx: got.ctx };
@@ -332,7 +339,7 @@ export function initRoutePanel(app) {
       braid(0.25);
       const key = JSON.stringify([prefs.avoidSteps, prefs.strictGates, store.openGates.map((o) => [o.lat, o.lon])]);
       if (!S.graph || S.graphKey !== key) {
-        say('Строю граф улиц…'); await tick();
+        say('Готовлю карту улиц…'); await tick();
         S.graph = Core.buildGraph(S.net.parsed, { avoidSteps: prefs.avoidSteps, strictGates: prefs.strictGates, openGates: store.openGates });
         S.graphKey = key; S.router = null;
       }
@@ -423,7 +430,7 @@ export function initRoutePanel(app) {
       renderResults(); drawRoutes(true);
     } catch (e) {
       if (e && e.name === 'AbortError') say('Построение отменено.');
-      else say((e && e.message) || 'Не удалось построить маршрут.', 'warn');
+      else say(userMessage(e, 'Не удалось построить маршрут.'), 'warn');
     } finally {
       setBusy(false); S.abort = null;
     }

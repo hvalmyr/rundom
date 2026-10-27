@@ -56,7 +56,7 @@ export function overpass(query, signal) {
         lastErr = e;
         running--;
         if (next < MIRRORS.length) launch();
-        else if (!running) finish(reject, lastErr || new Error('Overpass недоступен'));
+        else if (!running) finish(reject, lastErr || new Error('Не удалось загрузить улицы: сервер карты не отвечает. Попробуйте ещё раз через минуту.'));
       }).finally(() => clearTimeout(to));
     }
     launch();

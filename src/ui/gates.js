@@ -31,10 +31,15 @@ export function initGates(app) {
     return p;
   }
 
+  /* что за преграда — словами, без тегов карты */
+  const BARRIER = { gate: 'Ворота', lift_gate: 'Шлагбаум', swing_gate: 'Поворотный шлагбаум', sliding_gate: 'Откатные ворота',
+    wall: 'Стена', fence: 'Забор', hedge: 'Живая изгородь', retaining_wall: 'Подпорная стена', city_wall: 'Крепостная стена' };
+  const ACCESS = { private: 'частный проход', no: 'проход закрыт', customers: 'только для посетителей', permit: 'по пропускам',
+    military: 'военный объект', delivery: 'только для доставки', destination: 'только к местам внутри' };
   function gatePopup(c) {
     return el('div', { class: 'pop' },
       el('strong', null, 'Закрытый проход'),
-      el('div', { class: 'sub' }, c.barrier + (c.access ? ' (access=' + c.access + ')' : '') + (c.name ? ', ' + c.name : '') + ' · по данным OSM'),
+      el('div', { class: 'sub' }, [BARRIER[c.barrier] || 'Преграда', ACCESS[c.access], c.name].filter(Boolean).join(' · ') + '. По данным карты OpenStreetMap'),
       el('button', { class: 'btn small', type: 'button', onclick: () => { app.reopenGate(c); map.closePopup(); } }, 'На самом деле открыто'));
   }
 

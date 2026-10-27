@@ -5,7 +5,7 @@ import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { divIcon, cssVar } from '../map/map.js';
-import { el, uid, round5, toast } from './dom.js';
+import { el, uid, round5, toast, userMessage } from './dom.js';
 
 const REPEL_R = 150;
 const LONG_PRESS = 400;
@@ -279,7 +279,7 @@ export function initRope(app) {
       }
     } catch (e) {
       if (e && e.name === 'AbortError') app.say('Перестройка отменена.');
-      else app.say((e && e.message) || 'Не удалось перестроить маршрут.', 'warn');
+      else app.say(userMessage(e, 'Не удалось перестроить маршрут.'), 'warn');
     } finally {
       Core.applyBlocks(g, spec);
       app.setBusy(false); S.abort = null;

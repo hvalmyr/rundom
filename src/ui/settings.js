@@ -14,8 +14,8 @@ const LEGEND = [
   ['<path d="M6 10H34" style="stroke:var(--carmine);stroke-width:2.5"/><path d="M6 3V17M34 3V17" style="stroke:var(--carmine);stroke-width:3;stroke-linecap:round"/>', 'Тупик: закрытый вами отрезок'],
   ['<rect x="4" y="3" width="32" height="14" style="fill:url(#rd-hatch);stroke:var(--carmine);stroke-width:1.6;stroke-dasharray:5 3"/>', 'Запретная зона (серый пунктир — выключена)'],
   ['<circle cx="20" cy="10" r="10" style="fill:var(--surface);stroke:var(--carmine);stroke-width:2"/><text x="20" y="14" text-anchor="middle" style="font:600 10px var(--font-sans);fill:var(--ink)">5</text>', 'Километровые метки'],
-  ['<path d="M2 10H38" style="stroke:var(--map-gate-osm);stroke-width:2;stroke-dasharray:4 5"/>', 'Пути, закрытые для пешехода (OSM)'],
-  ['<path d="M2 10H38" style="stroke:var(--map-street);stroke-width:5"/><rect x="18" y="3" width="4" height="14" rx="1" style="fill:var(--map-gate-osm)"/>', 'Закрытые ворота (OSM)'],
+  ['<path d="M2 10H38" style="stroke:var(--map-gate-osm);stroke-width:2;stroke-dasharray:4 5"/>', 'Пути, закрытые для пешехода'],
+  ['<path d="M2 10H38" style="stroke:var(--map-street);stroke-width:5"/><rect x="18" y="3" width="4" height="14" rx="1" style="fill:var(--map-gate-osm)"/>', 'Закрытые ворота'],
   ['<circle cx="13" cy="10" r="5" style="fill:var(--surface);stroke:var(--petrol);stroke-width:2.5"/><circle cx="29" cy="10" r="5" style="fill:var(--carmine)"/>', 'Место / маршрут пройдёт через него']
 ];
 
