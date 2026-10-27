@@ -10,6 +10,7 @@ const rows = [], fails = [];
 const check = (name, ok, text) => { rows.push(`| ${ok ? '✅' : '❌'} | ${name} | ${text} |`); if (!ok) fails.push(name); };
 
 check('Районов внутри МКАД', s.districts >= 95, String(s.districts));
+check('Справка «О районе»', s.about >= s.districts * 0.8, `${s.about} из ${s.districts}`);
 check('Индекс', s.indexGz <= 300 * KB, Math.round(s.indexGz / KB) + ' КБ gzip (бюджет 300)');
 /* центральные районы плотнее остальных: бюджет 80 КБ вместо 40 */
 check('Самый крупный район', s.maxDistrictGz <= 80 * KB, Math.round(s.maxDistrictGz / KB) + ' КБ gzip (бюджет 80)');

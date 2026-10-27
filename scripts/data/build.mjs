@@ -379,19 +379,27 @@ log('объектов', dedup.length, 'парков', parkList.length);
 /* ---------- Википедия: первый абзац о районе ---------- */
 let cache = {};
 try { cache = JSON.parse(readFileSync(CACHE, 'utf8')); } catch { /* нет кэша */ }
+for (const k of Object.keys(cache)) if (!cache[k]) delete cache[k]; /* «нет статьи» перепроверяем */
+/* Википедия ограничивает частоту: запросы по одному с паузой, на 429 и 5xx — повтор;
+   «нет статьи» кэшируется только по 404. */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function wiki(title) {
   if (!title) return null;
   if (title in cache) return cache[title];
   const t = title.replace(/^ru:/, '');
   if (t === title && /^[a-z-]+:/.test(title)) return (cache[title] = null);
-  try {
-    const res = await fetch('https://ru.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(t.replace(/ /g, '_')),
-      { headers: { 'User-Agent': 'rundom-data (github.com/hvalmyr/rundom)' }, signal: AbortSignal.timeout(20000) });
-    if (!res.ok) return (cache[title] = null);
-    const j = await res.json();
-    cache[title] = j.extract ? { t: trimText(j.extract), u: j.content_urls && j.content_urls.desktop ? j.content_urls.desktop.page : 'https://ru.wikipedia.org/wiki/' + encodeURIComponent(t) } : null;
-  } catch (e) { console.warn('wiki', t, e.message); return null; }
-  return cache[title];
+  const url = 'https://ru.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(t.replace(/ /g, '_'));
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await sleep(attempt ? 2000 * 2 ** attempt : 250);
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': 'rundom-data (github.com/hvalmyr/rundom)' }, signal: AbortSignal.timeout(20000) });
+      if (res.status === 404) return (cache[title] = null);
+      if (!res.ok) { console.warn('wiki', res.status, t); continue; }
+      const j = await res.json();
+      return (cache[title] = j.extract ? { t: trimText(j.extract), u: j.content_urls && j.content_urls.desktop ? j.content_urls.desktop.page : 'https://ru.wikipedia.org/wiki/' + encodeURIComponent(t) } : null);
+    } catch (e) { console.warn('wiki', t, e.message); }
+  }
+  return null;
 }
 function trimText(s) {
   s = s.replace(/\u0301/g, '').replace(/\s+/g, ' ').trim();
@@ -417,6 +425,7 @@ mkdirSync(OUT + '/d', { recursive: true });
 const version = header.timestamp || Math.floor(Date.now() / 1000);
 const index = { v: version, date: new Date(version * 1000).toISOString().slice(0, 10), mkad: encLine(mkadRing, [0, 0]), km: Math.round(total / 100) / 10, d: [] };
 const sizes = [];
+let about_n = 0;
 for (let i = 0; i < districts.length; i++) {
   const d = districts[i], dd = D[i];
   if (dd.km < 2000) continue; /* район за МКАД или почти целиком за ним */
@@ -433,6 +442,7 @@ for (let i = 0; i < districts.length; i++) {
     s: streets.map((s) => ({ n: s.n || undefined, t: s.t === 20 ? undefined : s.t, c: joinChains(s.chains).map((c) => encLine(c, o)) })),
     ob: objs, pk, about: about || undefined
   };
+  if (about) about_n++;
   const json = JSON.stringify(file);
   writeFileSync(`${OUT}/d/${d.id}.json`, json);
   const gz = gzipSync(json).length;
@@ -448,7 +458,7 @@ const ij = JSON.stringify(index);
 writeFileSync(`${OUT}/index.json`, ij);
 const stats = {
   version, date: index.date, km: index.km, districts: index.d.length,
-  streets: index.d.reduce((s, d) => s + d.st, 0), objects: index.d.reduce((s, d) => s + d.ob, 0), parks: index.d.reduce((s, d) => s + d.pk, 0),
+  streets: index.d.reduce((s, d) => s + d.st, 0), about: about_n, objects: index.d.reduce((s, d) => s + d.ob, 0), parks: index.d.reduce((s, d) => s + d.pk, 0),
   indexGz: gzipSync(ij).length, maxDistrictGz: Math.max(...sizes.map((s) => s.gz)), minDistrictGz: Math.min(...sizes.map((s) => s.gz)),
   totalGz: sizes.reduce((s, x) => s + x.gz, 0) + gzipSync(ij).length
 };
