@@ -16,7 +16,8 @@ const DEFAULTS = {
     dirMode: 'any', dirBearing: 0, dirSpread: 30, districts: [], distStrict: false, distMulti: 'one',
     main: 60, appeal: 40, novelty: 0, poi: 50, avoidSteps: true, strictGates: false, kmStep: 1, pace: '6:00'
   },
-  layers: { explored: true, places: true, gates: true, osm: false, covPlaces: true, legendOpen: false },
+  /* v — версия набора слоёв: со 2-й закрытые проходы по умолчанию выключены */
+  layers: { explored: true, places: true, gates: false, osm: false, covPlaces: true, legendOpen: false, v: 2 },
   view: { lat: 55.7558, lon: 37.6173, z: 12 },
   theme: 'auto'
 };
@@ -32,6 +33,8 @@ function load() {
     if (MERGED.includes(k)) Object.assign(d[k], s[k]);
     else if (k in d) d[k] = s[k];
   }
+  /* сохранённые до 2-й версии слоёв: закрытые проходы выключаются один раз, дальше — как выберет человек */
+  if (!s.layers || !(s.layers.v >= 2)) { d.layers.gates = false; d.layers.v = 2; }
   return d;
 }
 
