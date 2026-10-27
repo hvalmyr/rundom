@@ -101,7 +101,7 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
 /* отдельная кнопка — на всю ширину, равнозначные — поровну */
 .tabpane > .btn { width: 100%; }
 .btns { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-2); }
-.btns > .btn { min-width: 0; }
+.btns > .btn { min-width: 0; width: 100%; height: auto; min-height: var(--control-h); padding-block: 4px; line-height: 16px; white-space: normal; text-align: center; }
 
 /* ---------- чипы и переключатели ---------- */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -319,8 +319,7 @@ h2.sec .count:not(:empty) { margin-left: 4px; color: var(--ink-muted); font-weig
 }
 .banner[hidden] { display: none; }
 .banner #bannerText { overflow-wrap: anywhere; }
-.banner .btns { display: flex; flex-wrap: wrap; justify-content: center; }
-.banner button { flex: 1 1 auto; min-width: 0; background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--radius-sm); min-height: var(--control-h); padding: 4px 10px; font-size: 13px; line-height: 16px; white-space: normal; cursor: pointer; }
+.banner button { width: 100%; min-width: 0; background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--radius-sm); min-height: var(--control-h); padding: 4px 10px; font-size: 13px; line-height: 16px; white-space: normal; cursor: pointer; }
 .banner button:hover { background: var(--paper); color: var(--ink); }
 .toast {
   position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 2000;
@@ -706,7 +705,6 @@ button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17p
 .facts dt { color: var(--ink-muted); }
 .facts dd { margin: 0; overflow-wrap: anywhere; }
 .about-place .site { font-size: 12.5px; }
-.pop .btns { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* лицензии в настройках */
 .licenses { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 18px; color: var(--ink-muted); }
@@ -758,6 +756,5 @@ button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17p
 .pcard .pc-sub { font-size: 12.5px; margin-top: -4px; }
 .pcard .desc { margin: 0; font-size: 14px; line-height: 21px; }
 .pcard .facts { font-size: 13px; line-height: 19px; }
-.pcard .btns { display: flex; gap: 6px; flex-wrap: wrap; }
 .facts dd.f-oh { white-space: pre-line; }
 .pitem .pname.go .chev { transform: rotate(-45deg); vertical-align: 1px; }

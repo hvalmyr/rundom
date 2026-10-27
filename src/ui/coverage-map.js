@@ -338,7 +338,7 @@ export function initCoverageMap(app) {
             class: 'btn small', type: 'button',
             onclick: () => { app.toggleForced({ id: fid, name: p.n, lat: p.lat, lon: p.lon }); renderPanel(); }
           }, app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут'),
-          el('button', { class: 'btn small ghost', type: 'button', onclick: () => openPlace(p) }, 'Показать на карте')]
+          el('button', { class: 'btn small', type: 'button', onclick: () => openPlace(p) }, 'На карте')]
       }));
   }
   /* сначала места со справкой: с фото, со статьёй, с фактами */
