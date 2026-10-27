@@ -97,6 +97,9 @@ export function initCoverageMap(app) {
       const poly = L.polygon(src.p, { renderer: fillR, className: 'cov-d' });
       poly.bindTooltip(() => d.n + ' · ' + pct(shareOf(d.id)), { sticky: true, direction: 'top', offset: [0, -8], className: 'dtip' });
       poly.on('click', (e) => { L.DomEvent.stop(e); select(d.id); });
+      /* при выбранном районе соседний под курсором проступает из затемнения */
+      poly.on('mouseover', () => { if (selected && d.id !== selected) { hovered = d.id; paintDim(); } });
+      poly.on('mouseout', () => { if (hovered === d.id) { hovered = null; paintDim(); } });
       G.fill.addLayer(poly);
       polys.set(d.id, poly);
     }
@@ -114,16 +117,18 @@ export function initCoverageMap(app) {
     if (selected && polys.get(selected)) polys.get(selected).bringToFront();
     paintDim();
   }
-  let dimFor = null;
+  let dimFor = null, hovered = null;
   function paintDim() {
-    if (dimFor === selected) return;
-    dimFor = selected;
+    const key = selected + '|' + hovered;
+    if (dimFor === key) return;
+    dimFor = key;
     G.dim.clearLayers();
-    const poly = selected && polys.get(selected);
-    if (!poly) return;
-    const ll = poly.getLatLngs();
-    const outer = L.LineUtil.isFlat(ll[0]) ? [ll[0]] : ll.map((part) => part[0]);
-    G.dim.addLayer(L.polygon([[[-85, -180], [-85, 180], [85, 180], [85, -180]], ...outer], { renderer: dimR, className: 'cov-dim', interactive: false }));
+    if (!selected || !polys.get(selected)) return;
+    const holes = [selected, hovered].filter((id) => id && polys.get(id)).flatMap((id) => {
+      const ll = polys.get(id).getLatLngs();
+      return L.LineUtil.isFlat(ll[0]) ? [ll[0]] : ll.map((part) => part[0]);
+    });
+    G.dim.addLayer(L.polygon([[[-85, -180], [-85, 180], [85, 180], [85, -180]], ...holes], { renderer: dimR, className: 'cov-dim', interactive: false }));
   }
 
   /* ---------- улицы ---------- */
@@ -163,8 +168,8 @@ export function initCoverageMap(app) {
   async function drawStreets() {
     const seq = ++drawSeq;
     if (!store.layers.covStreets) { G.lines.clearLayers(); return; }
-    const ids = new Set(inView(STREETS_ZOOM));
-    if (selected) ids.add(selected);
+    /* при выбранном районе — только его улицы: соседи затемнены одинаково на любом масштабе */
+    const ids = new Set(selected ? [selected] : inView(STREETS_ZOOM));
     const dists = [];
     for (const id of ids) { try { dists.push(await C.district(id)); } catch (e) { /* нет файла */ } }
     if (seq !== drawSeq || !active) return;
@@ -243,14 +248,14 @@ export function initCoverageMap(app) {
   /* на компьютере панель района закрывает правую часть карты */
   const fitPad = () => (phone.matches ? { padding: [30, 30] } : { paddingTopLeft: [30, 30], paddingBottomRight: [400, 30] });
   async function select(id, fit = true) {
-    if (id !== selected) { placeView = null; setFocus(null); }
+    if (id !== selected) { placeView = null; setFocus(null); hovered = null; }
     selected = id; tab = tab || 'streets'; streetShown = 60; dCat = 'all';
     G.sel.clearLayers();
     if (fit && polys.get(id)) map.fitBounds(polys.get(id).getBounds(), fitPad());
     try { if (!stats.has(id)) stats.set(id, await C.stats(id)); } catch (e) { /* покажем без улиц */ }
-    renderAll(false);
+    renderAll();
   }
-  function closePanel() { selected = null; placeView = null; setFocus(null); G.sel.clearLayers(); renderAll(false); }
+  function closePanel() { selected = null; placeView = null; hovered = null; setFocus(null); G.sel.clearLayers(); renderAll(); }
 
   function highlightStreet(dist, si) {
     G.sel.clearLayers();

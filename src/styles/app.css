@@ -576,6 +576,7 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .leaflet-pane path.cov-d.sel { stroke: var(--carmine-strong); stroke-opacity: 1; stroke-width: 2.6; }
 /* выбран район — остальные бледнеют, но остаются нажимаемыми */
 .leaflet-pane path.cov-d.dim { fill-opacity: calc(var(--cv, 0) * .3); stroke-opacity: .2; }
+.leaflet-pane path.cov-d.dim:hover { stroke-opacity: 1; stroke-width: 1.8; fill-opacity: max(.06, var(--cv, 0)); }
 .cv0 { --cv: .05; } .cv1 { --cv: .1; } .cv2 { --cv: .15; } .cv3 { --cv: .2; } .cv4 { --cv: .26; }
 .cv5 { --cv: .32; } .cv6 { --cv: .39; } .cv7 { --cv: .46; } .cv8 { --cv: .54; } .cv9 { --cv: .62; }
 .leaflet-pane path.cov-d[class*=" cv"]:not(.dim) { fill-opacity: var(--cv); }
