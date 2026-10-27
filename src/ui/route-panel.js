@@ -146,7 +146,7 @@ export function initRoutePanel(app) {
         p.km = v; renderKm(); save();
       }
     }, '+');
-    box.appendChild(el('label', { class: 'kmin' }, input, el('span', null, 'км')));
+    box.appendChild(el('label', { class: 'kmin' }, input));
     box.appendChild(add);
   }
 
