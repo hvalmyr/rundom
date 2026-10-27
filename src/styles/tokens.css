@@ -1,0 +1,101 @@
+/* rundom design tokens — generated from the rundom design system (tokens.json). Edit there, then regenerate. */
+:root {
+  --paper: #f6f4ef;
+  --surface: #fffdf8;
+  --surface-sunk: #eeebe3;
+  --line: #ddd8cc;
+  --line-strong: #8e8778;
+  --ink: #14222a;
+  --ink-muted: #5e6870;
+  --petrol: #0e5a73;
+  --petrol-strong: #0a4557;
+  --petrol-tint: #dceaee;
+  --on-petrol: #ffffff;
+  --carmine: #b0102c;
+  --carmine-strong: #8c0c23;
+  --carmine-tint: #f6dee2;
+  --on-carmine: #ffffff;
+  --warning: #7a5200;
+  --focus: var(--petrol);
+  --danger: var(--carmine-strong);
+  --map-ground: #eeebe3;
+  --map-street: #d6d1c4;
+  --map-unrun: #c4bdaf;
+  --map-explored: #4e95ab;
+  --map-route: var(--carmine);
+  --map-district: var(--petrol);
+  --map-gate-osm: #8e8778;
+  --shadow-float: 0 1px 2px rgba(20,34,42,0.08), 0 8px 24px rgba(20,34,42,0.10);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 2px;
+  --radius-md: 6px;
+  --radius-pill: 999px;
+  --stroke-route: 5px;
+  --stroke-approach: 1.5px;
+  --stroke-explored: 2.5px;
+  --stroke-street: 1px;
+  --stroke-unrun: 0.6px;
+  --district-fill-max: 0.32;
+  --district-fill-hover: 0.12;
+  --district-fill-selected: 0.22;
+  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Inter Tight", Inter, system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #151412;
+    --surface: #1d1c19;
+    --surface-sunk: #100f0e;
+    --line: #2c2a26;
+    --line-strong: #736d62;
+    --ink: #ece8df;
+    --ink-muted: #8f8a7f;
+    --petrol: #5bb3cf;
+    --petrol-strong: #8acde2;
+    --petrol-tint: #12313b;
+    --on-petrol: #08202a;
+    --carmine: #ff5c6e;
+    --carmine-strong: #ff8794;
+    --carmine-tint: #3b1219;
+    --on-carmine: #24060b;
+    --warning: #e9b44c;
+    --map-ground: #1a1916;
+    --map-street: #33302b;
+    --map-unrun: #423e37;
+    --map-explored: #2f7f98;
+    --map-gate-osm: #736d62;
+    --shadow-float: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #151412;
+  --surface: #1d1c19;
+  --surface-sunk: #100f0e;
+  --line: #2c2a26;
+  --line-strong: #736d62;
+  --ink: #ece8df;
+  --ink-muted: #8f8a7f;
+  --petrol: #5bb3cf;
+  --petrol-strong: #8acde2;
+  --petrol-tint: #12313b;
+  --on-petrol: #08202a;
+  --carmine: #ff5c6e;
+  --carmine-strong: #ff8794;
+  --carmine-tint: #3b1219;
+  --on-carmine: #24060b;
+  --warning: #e9b44c;
+  --map-ground: #1a1916;
+  --map-street: #33302b;
+  --map-unrun: #423e37;
+  --map-explored: #2f7f98;
+  --map-gate-osm: #736d62;
+  --shadow-float: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  color-scheme: dark;
+}

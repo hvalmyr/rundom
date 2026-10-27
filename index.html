@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>rundom</title>
+<meta name="description" content="Беговые маршруты по Москве и улицы, которые вы уже пробежали">
+<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700&display=swap">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <span class="wordmark">rundom</span>
+    <nav class="tabs" role="tablist" aria-label="Разделы">
+      <button role="tab" id="tab-route" aria-controls="pane-route" aria-selected="true" type="button">Маршрут</button>
+      <button role="tab" id="tab-library" aria-controls="pane-library" aria-selected="false" type="button">Библиотека</button>
+      <button role="tab" id="tab-progress" aria-controls="pane-progress" aria-selected="false" type="button">Прогресс</button>
+    </nav>
+    <button class="iconbtn ghost" id="settingsBtn" type="button" aria-label="Настройки" title="Настройки">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <aside class="panel" id="panel">
+    <div class="sheet-handle" id="sheetHandle" aria-hidden="true"><span></span></div>
+
+    <!-- ===== Маршрут ===== -->
+    <section class="tabpane" id="pane-route" role="tabpanel" aria-labelledby="tab-route">
+      <div class="field">
+        <label class="lbl" for="qA">Старт</label>
+        <div class="row">
+          <input id="qA" type="search" placeholder="Адрес или 55.7558, 37.6173" autocomplete="off">
+          <button class="iconbtn" id="pickA" type="button" aria-pressed="false" title="Указать на карте" aria-label="Указать старт на карте">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+          </button>
+          <button class="iconbtn" id="locA" type="button" title="Моё местоположение" aria-label="Взять моё местоположение">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8z"/></svg>
+          </button>
+        </div>
+        <div class="coord" id="infoA">не задан</div>
+        <div class="sug" id="sugA" hidden></div>
+      </div>
+
+      <label class="check"><input type="checkbox" id="loop"><span>Финиш там же<small>Без галочки можно задать отдельный финиш</small></span></label>
+
+      <div class="field" id="fieldB" hidden>
+        <label class="lbl" for="qB">Финиш</label>
+        <div class="row">
+          <input id="qB" type="search" placeholder="Адрес или координаты" autocomplete="off">
+          <button class="iconbtn" id="pickB" type="button" aria-pressed="false" title="Указать на карте" aria-label="Указать финиш на карте">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+          </button>
+        </div>
+        <div class="coord" id="infoB">не задан</div>
+        <div class="sug" id="sugB" hidden></div>
+      </div>
+
+      <div class="field">
+        <span class="lbl" id="kmLbl">Дистанция</span>
+        <div class="chips" id="kmChips" role="group" aria-labelledby="kmLbl"></div>
+        <div class="row">
+          <span class="muted">Допуск</span>
+          <div class="seg" id="tolSeg" role="group" aria-label="Допустимое отклонение длины">
+            <button type="button" data-tol="0.05">±5%</button><button type="button" data-tol="0.08">±8%</button><button type="button" data-tol="0.12">±12%</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="field" id="forcedField" hidden>
+        <span class="lbl">Пройти через</span>
+        <div class="chips" id="forcedList"></div>
+      </div>
+
+      <details class="more">
+        <summary>Предпочтения</summary>
+        <div class="sliders">
+          <div class="slider">
+            <label for="prefMain">Обходить большие дороги</label><output id="outMain"></output>
+            <input type="range" id="prefMain" min="0" max="100" step="5">
+          </div>
+          <div class="slider">
+            <label for="prefAppeal">Тропы, парки, пешеходные улицы</label><output id="outAppeal"></output>
+            <input type="range" id="prefAppeal" min="0" max="100" step="5">
+          </div>
+          <div class="slider">
+            <label for="prefNovelty">Новизна улиц</label><output id="outNovelty"></output>
+            <input type="range" id="prefNovelty" min="-100" max="100" step="10">
+            <div class="ends"><span>знакомые</span><span>новые</span></div>
+          </div>
+          <div class="slider">
+            <label for="prefPoi">Интересные места рядом</label><output id="outPoi"></output>
+            <input type="range" id="prefPoi" min="0" max="100" step="5">
+          </div>
+          <label class="check"><input type="checkbox" id="avoidSteps"><span>Без лестниц</span></label>
+          <label class="check"><input type="checkbox" id="strictGates"><span>Строго к шлагбаумам<small>Шлагбаумы с access=private считать закрытыми</small></span></label>
+          <div class="row">
+            <label class="muted" for="kmStep">Метки каждые</label>
+            <select id="kmStep">
+              <option value="0.5">0,5 км</option><option value="1">1 км</option><option value="2">2 км</option><option value="5">5 км</option>
+            </select>
+            <label class="muted" for="pace">темп</label>
+            <input id="pace" class="num" type="text" inputmode="numeric" value="6:00" size="5"><span class="muted">/км</span>
+          </div>
+        </div>
+      </details>
+
+      <button class="btn primary big" id="go" type="button">Построить маршруты</button>
+      <button class="btn big" id="cancel" type="button" hidden>Отменить</button>
+      <div class="progress" id="prog" hidden>
+        <svg class="braid" viewBox="0 0 400 18" preserveAspectRatio="none" aria-hidden="true">
+          <path class="track" d="M2 9H398"/>
+          <path class="a" id="braidA"/>
+          <path class="b" id="braidB"/>
+        </svg>
+      </div>
+      <p class="status" id="status" role="status"></p>
+      <div class="results" id="results"></div>
+    </section>
+
+    <!-- ===== Библиотека ===== -->
+    <section class="tabpane" id="pane-library" role="tabpanel" aria-labelledby="tab-library" hidden>
+      <p class="hint">Загрузите GPX своих пробежек или отметьте улицы вручную. Пройденное видно на карте, а ползунок «Новизна улиц» ведёт по новым местам или по знакомым.</p>
+      <div class="row">
+        <button class="btn own" id="importGpx" type="button">Загрузить GPX</button>
+        <button class="btn" id="drawBtn" type="button">Отметить вручную</button>
+        <input class="hidden-input" id="gpxFiles" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple tabindex="-1">
+      </div>
+      <div class="list" id="exploredList"></div>
+    </section>
+
+    <!-- ===== Прогресс ===== -->
+    <section class="tabpane" id="pane-progress" role="tabpanel" aria-labelledby="tab-progress" hidden>
+      <div class="stats-head">
+        <div><div class="stat" id="progKm">0</div><div class="muted">км пробежек в библиотеке</div></div>
+        <div><div class="stat" id="progCount">0</div><div class="muted">треков и отметок</div></div>
+      </div>
+      <p class="hint">Карта покрытия улиц внутри МКАД с процентами по районам, парки и достопримечательности появятся здесь в следующих этапах.</p>
+      <h2 class="sec">Места из OpenStreetMap</h2>
+      <label class="check"><input type="checkbox" id="showOsm"><span>Показывать на карте<small>Смотровые, достопримечательности, памятники, фонтаны, парки. Нажмите на место, чтобы маршрут прошёл через него</small></span></label>
+      <div class="row"><button class="btn" id="loadOsm" type="button">Загрузить в видимой области</button></div>
+      <div class="coord" id="osmInfo"></div>
+    </section>
+  </aside>
+
+  <section class="mapwrap">
+    <div id="map" aria-label="Карта"></div>
+    <div class="maptools" id="maptools">
+      <label><input type="checkbox" id="lyExplored"><span class="sw explored"></span>Пройденные</label>
+      <label><input type="checkbox" id="lyGates"><span class="sw gates"></span>Закрытые проходы</label>
+      <label><input type="checkbox" id="lyPlaces"><span class="sw places"></span>Места</label>
+    </div>
+    <div class="banner" id="banner" hidden><span id="bannerText"></span><button type="button" id="bannerOk" hidden>Готово</button><button type="button" id="bannerUndo" hidden>Отменить точку</button><button type="button" id="bannerCancel">Отмена</button></div>
+  </section>
+</div>
+
+<dialog class="settings" id="settings" aria-labelledby="settingsTitle">
+  <form method="dialog" class="settings-body">
+    <header class="settings-head"><h2 id="settingsTitle">Настройки</h2><button class="iconbtn ghost" value="close" aria-label="Закрыть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+    <div class="field">
+      <span class="lbl">Тема</span>
+      <div class="seg" id="themeSeg" role="group" aria-label="Тема">
+        <button type="button" data-theme="auto">Авто</button><button type="button" data-theme="light">Светлая</button><button type="button" data-theme="dark">Тёмная</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="lbl" for="tileSel">Подложка карты</label>
+      <select id="tileSel"></select>
+    </div>
+    <div class="field">
+      <span class="lbl">Обозначения</span>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="field">
+      <span class="lbl">Резервная копия</span>
+      <p class="hint">Всё хранится только в этом браузере. Сохраните копию, чтобы перенести данные на другое устройство.</p>
+      <div class="row">
+        <button class="btn" id="exportData" type="button">Скачать копию</button>
+        <button class="btn" id="importData" type="button">Загрузить копию</button>
+        <input class="hidden-input" id="dataFile" type="file" accept=".json,application/json" tabindex="-1">
+      </div>
+    </div>
+    <div class="field">
+      <span class="lbl">Как строятся маршруты</span>
+      <p class="hint">Всё считается в браузере: граф улиц OpenStreetMap и поиск пути A*. Закрытые ворота, частные и служебные проезды в граф не попадают. Данные карты © участники OpenStreetMap.</p>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
