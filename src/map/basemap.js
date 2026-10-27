@@ -29,11 +29,18 @@ export async function createBasemap(map, st, { cssVar, onError }) {
   const gl = layer.getMaplibreMap();
   gl.on('error', (e) => { console.warn(e.error); onError(); });
 
-  const when = (fn) => (gl.isStyleLoaded() ? fn() : gl.once('styledata', fn));
+  /* Правка ложится сразу, если источник или слой уже есть в стиле. isStyleLoaded() тут не годится:
+     он ложен, пока догружаются тайлы подложки, и линия маршрута ждала бы следующего события стиля —
+     поэтому трек обновлялся с задержкой или не обновлялся вовсе. Пока стиль грузится (старт, смена темы),
+     правка ждёт style.load; данные она берёт из st в момент применения. */
+  const when = (has, fn) => (has() ? fn() : gl.once('style.load', () => has() && fn()));
   return {
-    data(id) { when(() => gl.getSource(overlaySource(id))?.setData(linesGeoJSON(st.data[id]))); },
-    paint(layerId, prop, value) { when(() => gl.getLayer(layerId) && gl.setPaintProperty(layerId, prop, value)); },
-    visible(layerId, on) { when(() => gl.getLayer(layerId) && gl.setLayoutProperty(layerId, 'visibility', on ? 'visible' : 'none')); },
+    data(id) {
+      const src = overlaySource(id);
+      when(() => gl.getSource(src), () => gl.getSource(src).setData(linesGeoJSON(st.data[id])));
+    },
+    paint(layerId, prop, value) { when(() => gl.getLayer(layerId), () => gl.setPaintProperty(layerId, prop, value)); },
+    visible(layerId, on) { when(() => gl.getLayer(layerId), () => gl.setLayoutProperty(layerId, 'visibility', on ? 'visible' : 'none')); },
     /* смена темы: стиль заново из токенов, данные и правки линий берутся из st */
     restyle() { gl.setStyle(style(), { diff: false }); },
     /* номер линии слоя layerId в радиусе r пикселей от точки, или null */

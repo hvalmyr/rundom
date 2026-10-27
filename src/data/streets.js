@@ -10,6 +10,8 @@ const BASE = './data/g/';
 const AREAS = 'areas';
 const MAX_AREAS = 8;
 const MAX_AGE = 30 * 864e5;
+/* версия записи кэша: с 2 в ней есть светофоры (подсчёт регулируемых переходов) */
+const AREA_V = 2;
 
 let indexP = null;
 function tileIndex() {
@@ -32,13 +34,24 @@ function boxOf(need) {
     Math.max(need.A[0], need.B[0]) + dLat, Math.max(need.A[1], need.B[1]) + dLon
   ];
 }
-async function fromTiles(ix, keys, signal) {
-  keys = keys.filter((k) => ix.have.has(k));
-  const tiles = await Promise.all(keys.map((k) =>
-    fetch(BASE + k + '.json', { signal }).then((r) => {
+/* Разобранные тайлы держим в памяти: их читают и генератор, и слой закрытых проходов. */
+const tileCache = new Map(), TILE_CACHE = 48;
+function getTile(k, signal) {
+  let p = tileCache.get(k);
+  if (!p) {
+    p = fetch(BASE + k + '.json', { signal }).then((r) => {
       if (!r.ok) throw new Error('Тайл улиц ' + k + ': HTTP ' + r.status);
       return r.json();
-    })));
+    });
+    p.catch(() => tileCache.delete(k));
+    tileCache.set(k, p);
+    if (tileCache.size > TILE_CACHE) tileCache.delete(tileCache.keys().next().value);
+  }
+  return p;
+}
+async function fromTiles(ix, keys, signal) {
+  keys = keys.filter((k) => ix.have.has(k));
+  const tiles = await Promise.all(keys.map((k) => getTile(k, signal)));
   const net = [], ctx = [];
   for (const t of tiles) { Core.unpackNetwork(t.net, net); Core.unpackContext(t.ctx, ctx); }
   return {
@@ -48,13 +61,28 @@ async function fromTiles(ix, keys, signal) {
   };
 }
 
+/* Тайлы графа в прямоугольнике [юг, запад, север, восток] для слоя закрытых проходов:
+   {covered — область целиком в покрытии тайлов, tiles: [{key, net}]}. Без тайлов на сайте — null. */
+export async function viewTiles(box) {
+  const ix = await tileIndex();
+  if (!ix) return null;
+  const keys = Core.tilesInBox(box, ix.grid);
+  if (keys.length > 16) return null;
+  const tiles = [];
+  for (const k of keys.filter((x) => ix.have.has(x))) {
+    try { tiles.push({ key: k, net: (await getTile(k)).net }); } catch (e) { /* тайл не загрузился */ }
+  }
+  return { covered: keys.every((k) => ix.cover.has(k)), tiles };
+}
+
 /* ---------- кэш ответов Overpass ---------- */
 async function cachedArea(need) {
   let list;
   try { list = await all(AREAS); } catch { return null; }
   const now = Date.now();
-  for (const a of list) if (now - a.created > MAX_AGE) del(AREAS, a.id).catch(() => {});
-  return list.find((a) => now - a.created <= MAX_AGE && Core.regionContains(a.region, need)) || null;
+  const stale = (a) => now - a.created > MAX_AGE || (a.v || 1) < AREA_V;
+  for (const a of list) if (stale(a)) del(AREAS, a.id).catch(() => {});
+  return list.find((a) => !stale(a) && Core.regionContains(a.region, need)) || null;
 }
 
 async function saveArea(need, net, ctx) {
@@ -64,7 +92,7 @@ async function saveArea(need, net, ctx) {
     for (const a of list) if (Core.regionContains(need, a.region)) await del(AREAS, a.id);
     const left = list.filter((a) => !Core.regionContains(need, a.region));
     for (const a of left.slice(0, Math.max(0, left.length - MAX_AREAS + 1))) await del(AREAS, a.id);
-    await put(AREAS, { id: Date.now().toString(36), region: need, created: Date.now(), net, ctx });
+    await put(AREAS, { id: Date.now().toString(36), v: AREA_V, region: need, created: Date.now(), net, ctx });
   } catch (e) { console.warn('кэш улиц', e); }
 }
 
