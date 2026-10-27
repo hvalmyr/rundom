@@ -7,6 +7,7 @@ import { cssVar } from '../map/map.js';
 import { $, el, fmtKm, fmt1, syncSeg } from './dom.js';
 import { placeMarker, placeSvg } from './place-icons.js';
 import { pillSelect } from './pill-select.js';
+import { about, photo, placeCard, panelHead, reveal, fmtCredit, fmtLicense, phone, scrollToPanel } from './place-card.js';
 
 const CAT = {
   park: 'парк', view: 'смотровая', worship: 'храм', monument: 'памятник', museum: 'музей',
@@ -175,9 +176,7 @@ export function initCoverageMap(app) {
         }
         const on = isFocus(p);
         const m = L.marker([p.lat, p.lon], { pane: 'covMarks', icon: placeMarker(p.c, 'st' + p.st + (on ? ' on' : '')), title: p.n, keyboard: false, zIndexOffset: on ? 1000 : 0 });
-        m.bindPopup(() => placePopup(p), popOpts());
-        m.on('popupopen', () => setFocus(p));
-        m.on('popupclose', () => setFocus(null));
+        m.on('click', () => openPlace(p));
         G.places.addLayer(m);
       }
     }
@@ -196,75 +195,30 @@ export function initCoverageMap(app) {
       l.setZIndexOffset(hit ? 1000 : 0);
     });
   }
-  function placePopup(p) {
-    const key = C.placeKey(p.id, p.c, p.n), st = stateOf(p.id, p.i, p.park, p.c, p.n);
-    const fid = 'cov:' + key;
-    return el('div', { class: 'pop place' },
-      p.w && p.w.i ? photo(p.w.i) : null,
-      el('strong', null, Core.placeName({ name: p.n, cat: p.c })),
-      el('div', { class: 'sub' }, [CAT[p.c], STATE[st], p.s].filter(Boolean).join(' · ')),
-      about(p),
-      el('div', { class: 'btns' },
-        el('button', { class: 'btn small', type: 'button', onclick: () => { toggleVisited(p); map.closePopup(); } }, st === 2 ? 'Снять отметку' : 'Исследовал'),
-        el('button', {
-          class: 'btn small', type: 'button',
-          onclick: () => { app.toggleForced({ id: fid, name: p.n, lat: p.lat, lon: p.lon }); map.closePopup(); }
-        }, app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут')));
-  }
-  /* справка о месте: вступление статьи Википедии, описание и факты из OSM */
-  const FACTS = [['y', 'Год'], ['ar', 'Архитектор'], ['au', 'Автор'], ['sb', 'Посвящён'], ['de', 'Конфессия'],
-    ['he', 'Объект наследия'], ['oh', 'Часы работы'], ['in', 'Надпись']];
-  /* даты OSM: 2005-05-09 → 9 мая 2005, 1895-06 → июнь 1895 */
-  const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-  const MONTH1 = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
-  const fmtDate = (v) => v.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (m, y, mo, d) => MONTHS[mo - 1] ? Number(d) + ' ' + MONTHS[mo - 1] + ' ' + y : m)
-    .replace(/\b(\d{4})-(\d{2})\b/g, (m, y, mo) => MONTH1[mo - 1] ? MONTH1[mo - 1] + ' ' + y : m).replace(/\bC(\d{1,2})\b/, '$1 век');
-  const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
-  function about(p) {
-    const f = p.f || {}, w = p.w || {};
-    const rows = FACTS.filter(([k]) => f[k]).map(([k, t]) => [t, k === 'y' ? fmtDate(f[k]) : f[k]]);
-    if (p.park && p.ha) rows.unshift(['Площадь', String(p.ha).replace('.', ',') + ' га']);
-    const nodes = [
-      w.t ? el('p', { class: 'desc' }, w.t, ' ', el('a', { href: w.u, target: '_blank', rel: 'noopener' }, 'Википедия')) : null,
-      !w.t && f.ds ? el('p', { class: 'desc' }, f.ds) : null,
-      rows.length ? el('dl', { class: 'facts' }, rows.flatMap(([t, v]) => [el('dt', null, t), el('dd', null, v)])) : null,
-      f.ws ? el('a', { class: 'site', href: f.ws, target: '_blank', rel: 'noopener' }, host(f.ws)) : null
-    ].filter(Boolean);
-    return nodes.length ? el('div', { class: 'about-place' }, nodes) : null;
-  }
-  /* фото с Commons: автор и лицензия под ним, ссылка на страницу файла */
-  function photo(i) {
-    return el('figure', { class: 'photo' },
-      el('img', { src: i.s, alt: '', loading: 'lazy', decoding: 'async' }),
-      el('figcaption', null, el('a', { href: i.f, target: '_blank', rel: 'noopener' }, i.a + ' · ' + i.l)));
-  }
   function toggleVisited(p) {
     const key = C.placeKey(p.id, p.c, p.n);
     if (store.visited[key]) delete store.visited[key]; else store.visited[key] = Date.now();
     save();
     renderAll(false);
   }
-  /* карточка места на карте не прячется под листом на телефоне: снизу отступ на его видимую часть */
-  const popOpts = () => {
-    const sheet = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-visible')) || 0;
-    return { maxWidth: 280, className: 'place-pop', autoPanPaddingTopLeft: [16, 16], autoPanPaddingBottomRight: [16, 16 + (phone.matches ? sheet : 0)] };
-  };
-  function showPlace(p) {
+  /* место открывается в панели района: справка вместо раздела, «назад» — к району */
+  let placeView = null;
+  function openPlace(p, move = true) {
     if (p.id !== selected) select(p.id, false);
-    /* на телефоне сначала сворачиваем лист: карточка открывается на карте уже нужного размера и целиком сдвигается в вид */
-    if (app.sheet) app.sheet.peek();
+    placeView = { id: p.id, i: p.i, park: p.park };
     setFocus(p);
-    setTimeout(() => {
-      map.invalidateSize();
-      map.setView([p.lat, p.lon], Math.max(map.getZoom(), 16), { animate: false });
-      L.popup(popOpts()).setLatLng([p.lat, p.lon]).setContent(placePopup(p))
-        .on('remove', () => setFocus(null)).openOn(map);
-    }, 260);
+    renderPanel();
+    if (phone.matches && app.sheet) { app.sheet.open(); scrollToPanel(panel); }
+    else panel.scrollTop = 0;
+    if (move) {
+      if (map.getZoom() < 16) map.setView([p.lat, p.lon], 16, { animate: false });
+      setTimeout(() => reveal(map, [p.lat, p.lon]), phone.matches ? 260 : 0);
+    }
   }
+  function closePlace() { placeView = null; setFocus(null); renderPanel(); }
 
   /* ---------- панель района ---------- */
   const panel = el('div', { class: 'dpanel', id: 'dpanel', hidden: true });
-  const phone = window.matchMedia('(max-width: 860px)');
   function placePanel() {
     if (phone.matches) $('#dpanelSlot').appendChild(panel);
     else mapEl.parentElement.appendChild(panel);
@@ -275,13 +229,14 @@ export function initCoverageMap(app) {
   /* на компьютере панель района закрывает правую часть карты */
   const fitPad = () => (phone.matches ? { padding: [30, 30] } : { paddingTopLeft: [30, 30], paddingBottomRight: [400, 30] });
   async function select(id, fit = true) {
+    if (id !== selected) { placeView = null; setFocus(null); }
     selected = id; tab = tab || 'streets'; streetShown = 60; dCat = 'all';
     G.sel.clearLayers();
     if (fit && polys.get(id)) map.fitBounds(polys.get(id).getBounds(), fitPad());
     try { if (!stats.has(id)) stats.set(id, await C.stats(id)); } catch (e) { /* покажем без улиц */ }
     renderAll(false);
   }
-  function closePanel() { selected = null; G.sel.clearLayers(); renderAll(false); }
+  function closePanel() { selected = null; placeView = null; setFocus(null); G.sel.clearLayers(); renderAll(false); }
 
   function highlightStreet(dist, si) {
     G.sel.clearLayers();
@@ -297,9 +252,10 @@ export function initCoverageMap(app) {
     panel.hidden = !selected || !active;
     if (panel.hidden) return;
     const d = info(selected), s = stats.get(selected);
-    panel.append(el('div', { class: 'dp-head' },
-      el('h2', null, d.n),
-      el('button', { class: 'iconbtn ghost', type: 'button', 'aria-label': 'Закрыть', onclick: closePanel, html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>' })));
+    const pv = placeView && s && placesOf(s.dist).find((p) => p.i === placeView.i && p.park === placeView.park);
+    if (pv) { renderPlaceView(d, pv); return; }
+    if (s) placeView = null; /* район ещё грузится — справка откроется, когда он загрузится */
+    panel.append(panelHead(d.n, closePanel));
     if (!s) { panel.append(el('p', { class: 'hint' }, 'Данные района не загрузились.')); return; }
     const dist = s.dist;
     const named = dist.streets.map((st, i) => ({ i, n: st.n, len: st.len, done: s.byStreet[i] })).filter((x) => x.n && x.len > 0);
@@ -347,7 +303,7 @@ export function initCoverageMap(app) {
     } else if (tab === 'places') {
       body.append(catChips(places, dCat, (c) => { dCat = c; renderPanel(); }));
       const list = places.filter((p) => dCat === 'all' || p.c === dCat).sort(byState);
-      body.append(el('div', { class: 'plist' }, list.map(placeRow)));
+      body.append(el('div', { class: 'plist' }, list.map((p) => placeRow(p, true))));
       if (!list.length) body.append(el('p', { class: 'hint' }, 'Здесь таких мест нет.'));
     } else {
       if (dist.about) {
@@ -365,11 +321,25 @@ export function initCoverageMap(app) {
               el('div', { class: 'sight-src' },
                 el('a', { href: p.w.u, target: '_blank', rel: 'noopener' }, 'Википедия'),
                 el('span', null, 'текст: CC BY-SA'),
-                p.w.i ? el('span', null, 'фото: ', el('a', { href: p.w.i.f, target: '_blank', rel: 'noopener' }, p.w.i.a), ', ' + p.w.i.l) : null)),
-            el('button', { class: 'pname', type: 'button', onclick: () => showPlace(p) }, Core.placeName({ name: p.n, cat: p.c })),
+                p.w.i ? el('span', null, 'фото: ', el('a', { href: p.w.i.f, target: '_blank', rel: 'noopener' }, fmtCredit(p.w.i.a)), ', ' + fmtLicense(p.w.i.l)) : null)),
+            el('button', { class: 'pname', type: 'button', onclick: () => openPlace(p) }, Core.placeName({ name: p.n, cat: p.c })),
             el('p', null, p.w.t)))));
       }
     }
+  }
+  function renderPlaceView(d, p) {
+    const fid = 'cov:' + C.placeKey(p.id, p.c, p.n);
+    panel.append(panelHead(Core.placeName({ name: p.n, cat: p.c }), closePanel, { t: d.n, on: closePlace }),
+      placeCard({
+        p, sub: [CAT[p.c], STATE[p.st], p.s].filter(Boolean).join(' · '),
+        buttons: [
+          el('button', { class: 'btn small' + (p.st === 2 ? '' : ' primary'), type: 'button', onclick: () => toggleVisited(p) }, p.st === 2 ? 'Снять отметку' : 'Исследовал'),
+          el('button', {
+            class: 'btn small', type: 'button',
+            onclick: () => { app.toggleForced({ id: fid, name: p.n, lat: p.lat, lon: p.lon }); renderPanel(); }
+          }, app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут'),
+          el('button', { class: 'btn small ghost', type: 'button', onclick: () => openPlace(p) }, 'Показать на карте')]
+      }));
   }
   /* сначала места со справкой: с фото, со статьёй, с фактами */
   const richness = (p) => (p.w && p.w.i ? 4 : 0) + (p.w && p.w.t ? 2 : 0) + (p.f && Object.keys(p.f).length ? 1 : 0);
@@ -391,7 +361,8 @@ export function initCoverageMap(app) {
   /* строка места раскрывается на месте: фото, справка, кнопки; открытой остаётся одна */
   let openRow = null;
   const rowKey = (p) => p.id + ':' + (p.park ? 'p' : 'o') + p.i;
-  function placeRow(p) {
+  /* inPanel — строка в панели района: открывает справку в самой панели */
+  function placeRow(p, inPanel) {
     const k = rowKey(p), fid = 'cov:' + C.placeKey(p.id, p.c, p.n);
     const rich = !!(p.w || (p.f && Object.keys(p.f).length) || p.ha);
     const item = el('div', { class: 'pitem' });
@@ -399,14 +370,15 @@ export function initCoverageMap(app) {
       p.w && p.w.i ? photo(p.w.i) : null,
       about(p) || el('p', { class: 'hint' }, 'Справки об этом месте пока нет.'),
       el('div', { class: 'btns' },
-        el('button', { class: 'btn small', type: 'button', onclick: () => showPlace(p) }, 'На карте'),
+        el('button', { class: 'btn small', type: 'button', onclick: () => openPlace(p) }, 'На карте'),
         el('button', {
           class: 'btn small', type: 'button',
           onclick: (e) => { app.toggleForced({ id: fid, name: p.n, lat: p.lat, lon: p.lon }); e.target.textContent = app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут'; }
         }, app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут')));
     const head = el('button', {
-      class: 'pname', type: 'button', 'aria-expanded': String(openRow === k), 'aria-controls': 'pd-' + k.replace(':', '-'),
+      class: 'pname' + (inPanel ? ' go' : ''), type: 'button', ...(inPanel ? {} : { 'aria-expanded': String(openRow === k), 'aria-controls': 'pd-' + k.replace(':', '-') }),
       onclick: () => {
+        if (inPanel) { openPlace(p); return; }
         const open = head.getAttribute('aria-expanded') !== 'true';
         document.querySelectorAll('.pitem.open').forEach((x) => { x.classList.remove('open'); x.querySelector('.pname').setAttribute('aria-expanded', 'false'); x.querySelector('.pdetail')?.remove(); });
         openRow = open ? k : null;
@@ -417,7 +389,7 @@ export function initCoverageMap(app) {
     item.append(el('div', { class: 'prow' },
       el('span', { class: 'pic st' + p.st, 'aria-hidden': 'true', html: placeSvg(p.c) }), head,
       el('button', { class: 'btn small ghost', type: 'button', onclick: () => toggleVisited(p) }, p.st === 2 ? 'Снять' : 'Исследовал')));
-    if (openRow === k) { item.classList.add('open'); item.append(detail()); }
+    if (!inPanel && openRow === k) { item.classList.add('open'); item.append(detail()); }
     return item;
   }
 

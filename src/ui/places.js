@@ -6,6 +6,7 @@ import { store, save } from '../storage/store.js';
 import { overpass } from '../data/overpass.js';
 import { placeMarker } from './place-icons.js';
 import { $, el } from './dom.js';
+import { placeCard, placePanel } from './place-card.js';
 
 const CATS = {
   view: 'Видовая точка', park: 'Парк', water: 'Вода, набережная', sight: 'Достопримечательность',
@@ -22,19 +23,31 @@ export function initPlaces(app) {
   const fromData = new Set(), osmBoxes = [];
   let mkadFlat = null;
 
+  /* место открывается в панели — как район в «Прогрессе»: справа над картой или в листе на телефоне */
+  const panel = placePanel(app, $('#placeSlot'));
+  let shownId = null;
+  function showPlace(p, move = true) {
+    const forced = app.isForced(p.id);
+    panel.show(p.name ? Core.placeName(p) : 'Без названия', placeCard({
+      p, sub: CATS[p.cat] || CATS.other,
+      buttons: [el('button', {
+        class: 'btn small' + (forced ? '' : ' primary'), type: 'button',
+        onclick: () => { app.toggleForced(p); showPlace(p, false); }
+      }, forced ? 'Убрать из маршрута' : 'Пройти через')]
+    }), move ? [p.lat, p.lon] : null, () => { shownId = null; render(); });
+    shownId = p.id;
+    render();
+  }
+  app.on('tab', () => { if (app.tab === 'progress') panel.hide(); });
+
   function render() {
     layers.osm.clearLayers();
     const b = map.getBounds().pad(0.2);
     const shown = S.osmPois.filter((p) => b.contains([p.lat, p.lon]) || app.isForced(p.id)).slice(0, MAX_SHOWN);
     for (const p of shown) {
-      const m = L.marker([p.lat, p.lon], { icon: placeMarker(p.cat, app.isForced(p.id) ? 'via' : ''), title: p.name });
-      m.bindPopup(() => el('div', { class: 'pop' },
-        el('strong', null, p.name ? Core.placeName(p) : 'Без названия'),
-        el('div', { class: 'sub' }, CATS[p.cat] || CATS.other),
-        el('button', {
-          class: 'btn small' + (app.isForced(p.id) ? '' : ' primary'), type: 'button',
-          onclick: () => { app.toggleForced(p); map.closePopup(); }
-        }, app.isForced(p.id) ? 'Убрать из маршрута' : 'Пройти через')));
+      const on = shownId === p.id;
+      const m = L.marker([p.lat, p.lon], { icon: placeMarker(p.cat, (app.isForced(p.id) ? 'via' : '') + (on ? ' on' : '')), title: p.name, zIndexOffset: on ? 1000 : 0 });
+      m.on('click', () => showPlace(p));
       layers.osm.addLayer(m);
     }
     $('#osmInfo').textContent = !store.layers.osm ? ''
@@ -55,10 +68,10 @@ export function initPlaces(app) {
         try {
           const dist = await C.district(d.id);
           fromData.add(d.id);
-          for (const o of dist.objects) add({ id: 'cov:' + C.placeKey(d.id, o.c, o.n), name: o.n, lat: o.lat, lon: o.lon, cat: o.c });
+          for (const o of dist.objects) add({ id: 'cov:' + C.placeKey(d.id, o.c, o.n), name: o.n, lat: o.lat, lon: o.lon, cat: o.c, w: o.w, f: o.f });
           for (const p of dist.parks) {
             const r = p.rings[0], c = r.reduce((a, q) => [a[0] + q[0] / r.length, a[1] + q[1] / r.length], [0, 0]);
-            add({ id: 'cov:' + C.placeKey(d.id, 'park', p.n), name: p.n, lat: c[0], lon: c[1], cat: 'park' });
+            add({ id: 'cov:' + C.placeKey(d.id, 'park', p.n), name: p.n, lat: c[0], lon: c[1], cat: 'park', park: true, w: p.w, f: p.f, ha: p.ha });
           }
         } catch (e) { /* район не загрузился */ }
       }

@@ -735,3 +735,29 @@ button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17p
 .sug:not([hidden]) { animation: sug-in .16s cubic-bezier(.2, .7, .3, 1); transform-origin: top center; }
 @keyframes sug-in { from { opacity: 0; transform: translateY(-4px) scaleY(.96); } }
 @media (prefers-reduced-motion: reduce) { .sug:not([hidden]) { animation: none; } }
+
+/* панель места на картах «Маршрута» и «Библиотеки»: как панель района */
+#placeSlot:empty { display: none; }
+#placeSlot { padding: var(--space-4) var(--space-4) 0 max(16px, env(safe-area-inset-left, 0px)); }
+#placeSlot .dpanel { position: static; width: auto; box-shadow: none; overflow: visible; }
+#placeSlot:has(.dpanel[hidden]) { display: none; }
+@media (min-width: 861px) { .mapwrap:has(.placepanel:not([hidden])) .maptools { right: auto; left: 56px; } }
+.app:has(#map.cov) .placepanel { display: none; }
+.dp-headwrap { display: flex; flex-direction: column; gap: 2px; }
+.dp-back { all: unset; cursor: pointer; align-self: flex-start; font-size: 12.5px; line-height: 18px; color: var(--ink-muted); }
+.dp-back:hover { color: var(--ink); }
+.dp-back:focus-visible { outline: 2px solid var(--focus); }
+.dp-back .chev { display: inline-block; width: 6px; height: 6px; margin-right: 6px; vertical-align: 1px;
+  border-left: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+.pcard { display: flex; flex-direction: column; gap: 8px; }
+.pcard .photo { margin: 0; }
+.pcard .photo img { display: block; width: 100%; height: 200px; object-fit: cover; border-radius: 8px; background: var(--surface-sunk); }
+.pcard .photo figcaption { font-size: 11px; line-height: 15px; color: var(--ink-muted); margin-top: 3px; overflow-wrap: anywhere; }
+.pcard .photo figcaption a { color: inherit; }
+.pcard .pc-title { margin: 0; font: 600 16px/22px var(--font-display); }
+.pcard .pc-sub { font-size: 12.5px; margin-top: -4px; }
+.pcard .desc { margin: 0; font-size: 14px; line-height: 21px; }
+.pcard .facts { font-size: 13px; line-height: 19px; }
+.pcard .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.facts dd.f-oh { white-space: pre-line; }
+.pitem .pname.go .chev { transform: rotate(-45deg); vertical-align: 1px; }
