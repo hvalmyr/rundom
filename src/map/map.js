@@ -18,6 +18,8 @@ export function createMap() {
   const map = L.map('map', { zoomControl: true, preferCanvas: true, zoomSnap: 0.5 })
     .setView([store.view.lat, store.view.lon], store.view.z);
   L.control.scale({ imperial: false }).addTo(map);
+  /* ссылка на Leaflet без флага, который Leaflet 1.9 ставит по умолчанию */
+  map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
   map.attributionControl.addAttribution(ATTR_OSM);
 
   /* Векторная карта: подложка, линии приложения и подписи в одной карте MapLibre.
