@@ -28,8 +28,8 @@ export function initPlaces(app) {
   let shownId = null;
   function showPlace(p, move = true) {
     const forced = app.isForced(p.id);
-    panel.show(p.name ? Core.placeName(p) : 'Без названия', placeCard({
-      p, sub: CATS[p.cat] || CATS.other,
+    panel.show(placeCard({
+      p, title: p.name ? Core.placeName(p) : 'Без названия', sub: CATS[p.cat] || CATS.other,
       buttons: [el('button', {
         class: 'btn small' + (forced ? '' : ' primary'), type: 'button',
         onclick: () => { app.toggleForced(p); showPlace(p, false); }

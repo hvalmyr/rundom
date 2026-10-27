@@ -61,19 +61,20 @@ export function about(p) {
   const rows = FACTS.filter(([k]) => f[k]).map(([k, t]) => [t, FMT[k] ? FMT[k](f[k]) : f[k], k]);
   if (p.park && p.ha) rows.unshift(['Площадь', String(p.ha).replace('.', ',') + ' га', 'ha']);
   const nodes = [
-    w.t ? el('p', { class: 'desc' }, w.t, ' ', el('a', { href: w.u, target: '_blank', rel: 'noopener' }, 'Википедия')) : null,
+    w.t ? el('p', { class: 'desc' }, w.t) : null,
+    w.t ? el('a', { class: 'ext', href: w.u, target: '_blank', rel: 'noopener' }, 'Читать в Википедии') : null,
     !w.t && f.ds ? el('p', { class: 'desc' }, f.ds) : null,
     rows.length ? el('dl', { class: 'facts' }, rows.flatMap(([t, v, k]) => [el('dt', null, t), el('dd', { class: 'f-' + k }, v)])) : null,
-    f.ws ? el('a', { class: 'site', href: f.ws, target: '_blank', rel: 'noopener' }, host(f.ws)) : null
+    f.ws ? el('a', { class: 'ext', href: f.ws, target: '_blank', rel: 'noopener' }, host(f.ws)) : null
   ].filter(Boolean);
   return nodes.length ? el('div', { class: 'about-place' }, nodes) : null;
 }
 
-/* карточка места для панели: фото, название, подзаголовок, справка, кнопки */
+/* карточка места для панели: фото с подписью, название, статусы, справка, кнопки */
 export function placeCard({ p, title, sub, buttons }) {
   return el('div', { class: 'pcard' },
     p.w && p.w.i ? photo(p.w.i) : null,
-    title ? el('h3', { class: 'pc-title' }, title) : null,
+    title ? el('h2', { class: 'dp-title' }, title) : null,
     sub ? el('div', { class: 'muted pc-sub' }, sub) : null,
     about(p) || el('p', { class: 'hint' }, 'Справки об этом месте пока нет.'),
     buttons && buttons.length ? el('div', { class: 'btns' }, buttons) : null);
@@ -82,15 +83,14 @@ export function placeCard({ p, title, sub, buttons }) {
 const CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 export const phone = window.matchMedia('(max-width: 860px)');
 
-/* шапка панели: название и крестик; back — {t, on}: кнопка «назад» к району */
+/* шапка панели: название и крестик; без названия — только «назад» (back: {t, on}) и крестик */
 export function panelHead(title, onClose, back) {
   const close = el('button', { class: 'iconbtn ghost', type: 'button', 'aria-label': 'Закрыть', onclick: onClose, html: CLOSE });
-  /* у места внутри района: сверху «назад» и крестик, под ними название */
-  if (back) {
-    return el('div', { class: 'dp-headwrap' },
-      el('div', { class: 'dp-top' },
-        el('button', { class: 'dp-back', type: 'button', onclick: back.on }, el('span', { class: 'chev', 'aria-hidden': 'true' }), back.t), close),
-      el('h2', { class: 'dp-title' }, title));
+  /* у места: сверху «назад» (если есть) и крестик справа; название — в самой карточке, под фото */
+  if (!title) {
+    return el('div', { class: 'dp-top' },
+      back ? el('button', { class: 'dp-back', type: 'button', onclick: back.on }, el('span', { class: 'chev', 'aria-hidden': 'true' }), back.t) : null,
+      close);
   }
   return el('div', { class: 'dp-head' }, el('h2', null, title), close);
 }
@@ -109,11 +109,11 @@ export function placePanel(app, slot) {
     if (f) f();
   }
   /* показать место и сдвинуть карту так, чтобы оно не пряталось под панелью или листом */
-  function show(title, body, latlng, hidden) {
+  function show(body, latlng, hidden) {
     const again = !panel.hidden;
     if (again) { const f = onHide; onHide = null; if (f) f(); }
     onHide = hidden;
-    panel.replaceChildren(panelHead(title, hide), body);
+    panel.replaceChildren(panelHead(null, hide), body);
     panel.hidden = false;
     panel.scrollTop = 0;
     if (phone.matches) { app.sheet.open(); scrollToPanel(panel); }

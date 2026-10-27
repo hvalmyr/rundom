@@ -348,16 +348,15 @@ export function initCoverageMap(app) {
   }
   function renderPlaceView(d, p) {
     const fid = 'cov:' + C.placeKey(p.id, p.c, p.n);
-    panel.append(panelHead(Core.placeName({ name: p.n, cat: p.c }), closePanel, { t: d.n, on: closePlace }),
+    panel.append(panelHead(null, closePanel, { t: d.n, on: closePlace }),
       placeCard({
-        p, sub: [CAT[p.c], STATE[p.st], p.s].filter(Boolean).join(' · '),
+        p, title: Core.placeName({ name: p.n, cat: p.c }), sub: [CAT[p.c], STATE[p.st], p.s].filter(Boolean).join(' · '),
         buttons: [
           el('button', { class: 'btn small' + (p.st === 2 ? '' : ' primary'), type: 'button', onclick: () => toggleVisited(p) }, p.st === 2 ? 'Снять отметку' : 'Исследовал'),
           el('button', {
             class: 'btn small', type: 'button',
             onclick: () => { app.toggleForced({ id: fid, name: p.n, lat: p.lat, lon: p.lon }); renderPanel(); }
-          }, app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут'),
-          el('button', { class: 'btn small', type: 'button', onclick: () => openPlace(p) }, 'На карте')]
+          }, app.isForced(fid) ? 'Убрать из маршрута' : 'Провести маршрут')]
       }));
   }
   /* сначала места со справкой: с фото, со статьёй, с фактами */
