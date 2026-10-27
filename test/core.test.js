@@ -112,3 +112,43 @@ test('a gate the user marked open stops blocking the path', () => {
   assert.equal(open.closedGates.length, 0);
   assert.ok(open.E > closed.E);
 });
+
+test('compass: the farthest point of every ring lies in the chosen sector', () => {
+  const g = Core.buildGraph(Core.parseNetwork(gridNetwork(30)), {});
+  Core.applyContext(g, { parks: [], pois: [] });
+  const A = Core.nearestNode(g, 55.763, 37.624, 200, 10).node;
+  const gen = Core.createGenerator(g, { A, B: A, length: 5000, tol: 0.12, count: 3, seed: 5, maxAttempts: 300, dir: { bearing: 90, spread: 30 } });
+  while (!gen.run(50));
+  const res = gen.results();
+  assert.ok(res.routes.length > 0);
+  for (const r of res.routes) {
+    let far = r.coords[0], fd = 0;
+    for (const p of r.coords) { const d = Core.hav(r.coords[0][0], r.coords[0][1], p[0], p[1]); if (d > fd) { fd = d; far = p; } }
+    const b = Core.bearing(r.coords[0][0], r.coords[0][1], far[0], far[1]);
+    assert.ok(Math.abs(((b - 90) % 360 + 540) % 360 - 180) <= 32, 'bearing ' + b);
+  }
+});
+
+test('districts: one random district per variant, strict keeps the ring inside', () => {
+  const g = Core.buildGraph(Core.parseNetwork(gridNetwork(30)), {});
+  Core.applyContext(g, { parks: [], pois: [] });
+  const A = Core.nearestNode(g, 55.763, 37.624, 200, 10).node;
+  const box = (lat0, lon0, lat1, lon1) => [[[lat0, lon0], [lat0, lon1], [lat1, lon1], [lat1, lon0], [lat0, lon0]]];
+  const list = [
+    { n: 'Север', p: [box(55.7655, 37.6, 55.776, 37.648)] },
+    { n: 'Юг', p: [box(55.75, 37.6, 55.7605, 37.648)] }
+  ];
+  const idx = Core.districtIndex(list);
+  const zones = list.map((d, i) => ({ name: d.n, test: idx.tests[i] }));
+  const gen = Core.createGenerator(g, { A, B: A, length: 4000, tol: 0.12, count: 4, seed: 3, maxAttempts: 300, districts: { zones, mode: 'one', strict: true } });
+  while (!gen.run(50));
+  const res = gen.results();
+  assert.ok(res.routes.length > 0);
+  for (const r of res.routes) assert.ok(['Север', 'Юг'].includes(r.district));
+  assert.equal(new Set(res.routes.map((r) => r.district)).size, 2, 'both districts get a variant');
+  assert.equal(idx.mainOf([[55.77, 37.62], [55.771, 37.621]]), 'Север');
+  const away = { name: 'Далеко', test: Core.multiTest([box(55.9, 37.6, 55.91, 37.62)]) };
+  const far = Core.createGenerator(g, { A, B: A, length: 4000, districts: { zones: [...zones, away], mode: 'all', strict: false } });
+  assert.equal(far.state.error, 'districts');
+  assert.deepEqual(far.state.unreachable.map((u) => u.name), ['Далеко']);
+});

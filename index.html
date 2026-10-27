@@ -87,6 +87,37 @@
       </div>
 
       <div class="field">
+        <span class="lbl" id="dirLbl">Направление</span>
+        <div class="seg" id="dirSeg" role="group" aria-labelledby="dirLbl">
+          <button type="button" data-dir="any">Любое</button><button type="button" data-dir="compass">Компас</button><button type="button" data-dir="districts">Районы</button>
+        </div>
+      </div>
+
+      <div class="dirbox" id="compassBox" hidden>
+        <svg class="rose" id="rose" viewBox="-62 -62 124 124" role="group" aria-label="Сторона света"></svg>
+        <div class="slider">
+          <label for="dirSpread">Точность направления</label><output id="outSpread"></output>
+          <input type="range" id="dirSpread" min="15" max="60" step="5">
+          <div class="ends"><span>точнее</span><span>свободнее</span></div>
+        </div>
+      </div>
+
+      <div class="dirbox" id="districtBox" hidden>
+        <div class="chips" id="distChips"></div>
+        <div class="field">
+          <input id="distSearch" type="search" placeholder="Найти район" autocomplete="off" aria-label="Найти район">
+          <div class="sug" id="distSug" hidden></div>
+        </div>
+        <div class="seg" id="strictSeg" role="group" aria-label="Насколько строго держаться районов">
+          <button type="button" data-strict="1">Строго</button><button type="button" data-strict="0">По возможности</button>
+        </div>
+        <div class="seg" id="multiSeg" role="group" aria-label="Несколько районов">
+          <button type="button" data-multi="one">Один район на вариант</button><button type="button" data-multi="all">Через все</button>
+        </div>
+        <p class="hint" id="distHint"></p>
+      </div>
+
+      <div class="field">
         <span class="lbl" id="kmLbl">Дистанция, км <small id="kmHint" class="muted">вместе с подводкой</small></span>
         <div class="chips" id="kmChips" role="group" aria-labelledby="kmLbl"></div>
         <div class="row">

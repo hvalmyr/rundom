@@ -350,3 +350,28 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .leaflet-zones-pane path.zone.off { stroke: var(--map-gate-osm); stroke-dasharray: 3 4; fill: none; }
 .leaflet-zones-pane path.zone.draft { fill: none; stroke-dasharray: none; }
 .leaflet-zones-pane path.closed-seg { stroke: var(--carmine); stroke-width: 2.5; fill: none; }
+
+/* ---------- этап 4: направление ---------- */
+.dirbox { display: flex; flex-direction: column; gap: var(--space-3); }
+.dirbox .seg { align-self: flex-start; }
+.rose { width: 148px; height: 148px; align-self: center; user-select: none; }
+.rose .w { fill: var(--surface-sunk); stroke: var(--paper); stroke-width: 2; cursor: pointer; transition: fill .15s; }
+.rose .w:hover { fill: var(--line); }
+.rose .w.on { fill: var(--carmine); }
+.rose text { font: 500 10px var(--font-sans); fill: var(--ink-muted); pointer-events: none; }
+.rose text.on { fill: var(--paper); }
+.rose .needle { stroke: var(--carmine); stroke-width: 2; stroke-linecap: round; }
+.rose .hub { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1; cursor: pointer; }
+.rose .hub:hover { stroke: var(--ink); }
+.chip.dist { background: var(--carmine-tint); border-color: var(--carmine); color: var(--carmine-strong); }
+
+.leaflet-zones-pane path.district { stroke: var(--ink-muted); stroke-opacity: .7; stroke-width: 1.1; fill: var(--ink); fill-opacity: 0; transition: fill-opacity .18s, stroke .18s, stroke-width .18s; }
+.leaflet-zones-pane path.district.leaflet-interactive:hover { fill-opacity: .07; stroke: var(--ink); stroke-opacity: 1; stroke-width: 1.8; }
+.leaflet-zones-pane path.district.sel { fill: var(--carmine); fill-opacity: .14; stroke: var(--carmine); stroke-opacity: 1; stroke-width: 2; }
+.leaflet-zones-pane path.district.sel.leaflet-interactive:hover { fill-opacity: .22; }
+.leaflet-zones-pane path.cone { fill: var(--carmine); fill-opacity: .08; stroke: none; }
+.leaflet-zones-pane path.needle { stroke: var(--carmine); stroke-width: 2.5; stroke-linecap: round; fill: none; }
+.mk-handle { width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 3px solid var(--carmine); box-shadow: 0 0 0 2px var(--paper); cursor: grab; }
+.mk-dlabel { transform: translate(-50%, -50%); white-space: nowrap; padding: 2px 9px; border-radius: 10px; background: var(--surface); border: 1px solid var(--carmine); color: var(--carmine-strong); font: 500 12px/16px var(--font-sans); width: max-content; pointer-events: none; }
+.leaflet-tooltip.dtip { background: var(--ink); color: var(--paper); border: 0; box-shadow: none; font: 500 12px var(--font-sans); padding: 3px 8px; border-radius: 6px; }
+.leaflet-tooltip.dtip::before { display: none; }

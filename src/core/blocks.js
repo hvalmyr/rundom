@@ -5,6 +5,7 @@ import { computeComponents, nearestNode } from './graph.js';
 /* ---------- зоны ---------- */
 /* zone: {shape:'poly', ring:[[lat,lon],...]} или {shape:'circle', c:[lat,lon], r: метры} */
 function zoneTest(zone) {
+  if (zone.shape === 'multi') return multiTest(zone.polys);
   if (zone.shape === 'circle') {
     var cx = px(zone.c[1]), cy = py(zone.c[0]), r2 = zone.r * zone.r;
     return function (x, y) { return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r2; };
@@ -16,6 +17,49 @@ function zoneTest(zone) {
     if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
   });
   return function (x, y) { return x >= minx && x <= maxx && y >= miny && y <= maxy && pointInRing(x, y, flat); };
+}
+
+/* Мультиполигон: [[внешнее кольцо, дырки...], ...] в [lat, lon]. */
+function multiTest(polys) {
+  var parts = polys.map(function (poly) {
+    var rings = poly.map(function (ring) { return ring.flatMap(function (p) { return [px(p[1]), py(p[0])]; }); });
+    var o = rings[0], minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for (var i = 0; i < o.length; i += 2) {
+      if (o[i] < minx) minx = o[i]; if (o[i] > maxx) maxx = o[i]; if (o[i + 1] < miny) miny = o[i + 1]; if (o[i + 1] > maxy) maxy = o[i + 1];
+    }
+    return { rings: rings, minx: minx, miny: miny, maxx: maxx, maxy: maxy };
+  });
+  return function (x, y) {
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (x < p.minx || x > p.maxx || y < p.miny || y > p.maxy || !pointInRing(x, y, p.rings[0])) continue;
+      var hole = false;
+      for (var k = 1; k < p.rings.length && !hole; k++) hole = pointInRing(x, y, p.rings[k]);
+      if (!hole) return true;
+    }
+    return false;
+  };
+}
+
+/* Районы: проверки попадания и «главный район» линии (по большинству точек). */
+function districtIndex(list) {
+  var tests = list.map(function (d) { return multiTest(d.p); });
+  function at(lat, lon) {
+    var x = px(lon), y = py(lat);
+    for (var i = 0; i < tests.length; i++) if (tests[i](x, y)) return i;
+    return -1;
+  }
+  function mainOf(coords) {
+    var votes = {}, best = -1, bv = 0, step = Math.max(1, Math.floor(coords.length / 60));
+    for (var i = 0; i < coords.length; i += step) {
+      var k = at(coords[i][0], coords[i][1]);
+      if (k < 0) continue;
+      votes[k] = (votes[k] || 0) + 1;
+      if (votes[k] > bv) { bv = votes[k]; best = k; }
+    }
+    return best >= 0 ? list[best].n : null;
+  }
+  return { list: list, tests: tests, at: at, mainOf: mainOf };
 }
 
 /* Двоичная куча пар [ключ, узел] для коротких поисков Дейкстры. */
@@ -187,4 +231,4 @@ function reachWithin(g, src, maxLen) {
   };
 }
 
-export { zoneTest, applyBlocks, ensureTwins, reachWithin };
+export { zoneTest, multiTest, districtIndex, applyBlocks, ensureTwins, reachWithin };

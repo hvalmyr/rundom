@@ -37,6 +37,7 @@ export function initHome(app) {
     $('#approachMax').value = store.prefs.approachMax;
     $('#outApproach').textContent = store.prefs.approachMax ? store.prefs.approachMax + ' м' : 'без подводки';
     $('#approachMax').closest('.slider').hidden = !!store.ringStart;
+    app.emit('origin');
     if (!on) return;
     const editing = S.mode === 'home';
     if (h) {

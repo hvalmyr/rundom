@@ -11,6 +11,7 @@ const DEFAULTS = {
   prefs: {
     km: 10, kmPresets: [5, 10, 15, 21.1], tol: 0.08, loop: true,
     startMode: 'home', approachMax: 1000, allowRepeats: false,
+    dirMode: 'any', dirBearing: 0, dirSpread: 30, districts: [], distStrict: false, distMulti: 'one',
     main: 60, appeal: 40, novelty: 0, poi: 50, avoidSteps: true, strictGates: false, kmStep: 1, pace: '6:00'
   },
   layers: { explored: true, places: true, gates: true, osm: false },

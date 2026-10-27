@@ -68,8 +68,13 @@ export function initLibraryPanel(app) {
     app.emit('explored');
   }
 
-  /* Заметное место на треке, если рядом уже загружены места из OSM. */
+  /* Район и заметное место на треке: «Хамовники · Нескучный сад». */
   function placeOn(lines) {
+    const parts = [app.districtName(lines.flat()), poiOn(lines)].filter(Boolean);
+    return parts.length ? parts.join(' · ') : null;
+  }
+  /* Заметное место на треке, если рядом уже загружены места из OSM. */
+  function poiOn(lines) {
     const g = S.graph;
     if (!g || !g.pois || !g.pois.length) return null;
     const seen = [];

@@ -18,7 +18,8 @@ npm run build
 - `src/map/` — карта Leaflet и подложки.
 - `src/ui/` — вкладки «Маршрут», «Библиотека», «Прогресс», настройки, нижний лист на телефоне.
 - `src/storage/` — хранение на устройстве.
-- `src/data/` — запросы к Overpass.
+- `src/data/` — запросы к Overpass и границы районов (`districts.json`).
+- `scripts/build-districts.mjs` — пересборка границ районов из OSM: `npm run data:districts`.
 - `src/styles/tokens.css` — токены дизайн-системы rundom (две нити: петроль и кармин).
 - `docs/SPEC.md` — техническое задание и этапы.
 - `legacy/` — исходный прототип.

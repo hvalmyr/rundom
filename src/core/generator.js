@@ -82,12 +82,17 @@ function scoreRoute(m, prefs, err, overlap) {
 /* ---------- подбор маршрутов ---------- */
 /* o.exits — узлы выходов из дома: кольцо стартует в точке не дальше o.approachMax от выхода,
    подводка бежится туда и обратно. o.ringStart — точка старта кольца, заданная вручную.
-   o.noRepeat — кольцо не проходит одну улицу (с её тротуарами) дважды. */
+   o.noRepeat — кольцо не проходит одну улицу (с её тротуарами) дважды.
+   o.dir = {bearing, spread} — самая дальняя точка кольца лежит в секторе bearing ± spread градусов.
+   o.districts = {zones:[{name, test(x,y)}], mode:'one'|'all', strict} — дальняя точка в районе;
+   'one' — каждый вариант уходит в один случайный район, 'all' — кольцо проходит через все;
+   strict — между первым входом в районы и последним выходом кольцо не покидает их. */
 function createGenerator(g, o) {
   var rng = mulberry32(o.seed || 1);
   var router = makeRouter(g);
   var prefs = o.prefs || {};
   var cost = buildCost(g, prefs);
+  var strictCost = null;
   var A = o.A, B = o.B, L = o.length, tol = o.tol === undefined ? 0.08 : o.tol;
   var forced = (o.forced || []).filter(function (v) { return v !== A && v !== B; });
   var comp = g.comp[A];
@@ -152,6 +157,46 @@ function createGenerator(g, o) {
     if (g.comp[v] !== comp || g.deg[v] === 0) continue;
     if ((dist(v, A) + dist(v, B)) * 1.12 <= L * 1.05) pool.push(v);
   }
+  /* ---------- направление ---------- */
+  var A0 = A, dirPool = null, zones = null, inZone = null, zonePools = null, unreachable = [];
+  if (o.dir) {
+    dirPool = pool.filter(function (v) {
+      var d = dist(v, A0);
+      return d >= 0.15 * L && angleOff(v, A0) <= o.dir.spread;
+    });
+  }
+  function angleOff(v, from) {
+    var b = Math.atan2(X[v] - X[from], Y[v] - Y[from]) * 180 / Math.PI;
+    var d = Math.abs(((b - o.dir.bearing) % 360 + 540) % 360 - 180);
+    return d;
+  }
+  if (o.districts && o.districts.zones.length) {
+    var all = o.districts.zones;
+    inZone = new Int16Array(g.n).fill(-1);
+    var near = all.map(function () { return Infinity; });
+    for (var zv = 0; zv < g.n; zv++) {
+      if (g.comp[zv] !== comp) continue;
+      for (var zi = 0; zi < all.length; zi++) if (all[zi].test(X[zv], Y[zv])) { inZone[zv] = zi; break; }
+      if (inZone[zv] >= 0) near[inZone[zv]] = Math.min(near[inZone[zv]], dist(zv, A0));
+    }
+    zones = [];
+    all.forEach(function (z, i) {
+      /* кольцо длины L уходит от старта не дальше ~L/2, по улицам — меньше */
+      if (near[i] * 2 * 1.15 > L) unreachable.push({ name: z.name, dist: near[i] });
+      else zones.push(i);
+    });
+    zonePools = all.map(function () { return []; });
+    pool.forEach(function (v) { if (inZone[v] >= 0) zonePools[inZone[v]].push(v); });
+    zones = zones.filter(function (i) { return zonePools[i].length; });
+  }
+  var curZone = -1;
+  var strict = !!(o.districts && o.districts.strict && zones);
+  /* «строго»: улицы вне районов дороже, маршрут сам держится внутри */
+  if (strict) {
+    strictCost = new Float64Array(cost);
+    for (var se = 0; se < g.E; se++) if (inZone[g.eF[se]] < 0 && inZone[g.eT[se]] < 0) strictCost[se] *= 3;
+  }
+
   var attract = [];
   if (o.attract) o.attract.forEach(function (v) { if (g.comp[v] === comp && (dist(v, A) + dist(v, B)) * 1.12 <= L * 1.05) attract.push(v); });
   for (var e = 0; e < g.E && attract.length < 600; e += 7) {
@@ -167,6 +212,10 @@ function createGenerator(g, o) {
   var used = new Uint8Array(g.E), seen = new Uint8Array(g.E);
   var state = { done: pool.length < 5 && !forced.length, error: pool.length < 5 ? 'pool' : null };
   if (home && !fixed && (!starts || !starts.length)) { state.done = true; state.error = 'exits'; }
+  if (dirPool && !dirPool.length) { state.done = true; state.error = 'dir'; }
+  if (zones && (!zones.length || (o.districts.mode === 'all' && unreachable.length))) { state.done = true; state.error = 'districts'; }
+  state.unreachable = unreachable;
+  var dirRejects = 0;
 
   function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
   function pickVia() {
@@ -194,6 +243,19 @@ function createGenerator(g, o) {
   function makeVias() {
     var k = forced.length ? [0, 1, 1, 2][Math.floor(rng() * 4)] : [1, 1, 2, 2, 3][Math.floor(rng() * 5)];
     var vias = forced.slice();
+    /* одна «дальняя» точка — в секторе компаса или в районе; при «строго» и остальные в районах */
+    if (dirPool) { vias.push(pick(dirPool)); k = Math.max(0, k - 1); }
+    if (zones) {
+      if (o.districts.mode === 'all') zones.forEach(function (i) { vias.push(pick(zonePools[i])); });
+      else { curZone = pick(zones); vias.push(pick(zonePools[curZone])); }
+      k = Math.max(0, k - 1);
+      if (strict) {
+        var inner = [];
+        zones.forEach(function (i) { inner = inner.concat(o.districts.mode === 'all' || i === curZone ? zonePools[i] : []); });
+        for (var q = 0; q < k; q++) vias.push(pick(inner));
+        return order(vias);
+      }
+    }
     var side = rng() < 0.5 ? 1 : -1;
     for (var i = 0; i < k; i++) {
       var cand = pickVia(), tries = 0;
@@ -219,7 +281,7 @@ function createGenerator(g, o) {
     used.fill(0);
     var nodes = [seq[0]], edges = [];
     for (var i = 1; i < seq.length; i++) {
-      var r = router.route(cost, seq[i - 1], seq[i], used, noRepeat ? 40 : 6);
+      var r = router.route(strictCost || cost, seq[i - 1], seq[i], used, noRepeat ? 40 : 6);
       if (!r) return null;
       for (var j = 0; j < r.edges.length; j++) { mark(used, r.edges[j]); edges.push(r.edges[j]); }
       for (var q = 1; q < r.nodes.length; q++) nodes.push(r.nodes[q]);
@@ -240,6 +302,7 @@ function createGenerator(g, o) {
     }
     var eu = estimate(seq);
     if (eu > 50) c = 0.7 * c + 0.3 * Math.max(1.05, Math.min(2, ring / eu));
+    if ((dirPool || zones) && !directionOk(r)) { dirRejects++; return; }
     var total = ring + 2 * cur.d;
     var err = Math.abs(total - L) / L;
     var ov = ring ? overlap / ring : 0;
@@ -252,7 +315,8 @@ function createGenerator(g, o) {
     }
     var cand = {
       nodes: nodes, edges: edges, length: total, err: err, overlap: ov, repeat: overlap, via: seq.slice(1, -1),
-      approach: cur.d, apN: cur.nodes.length, ringN: r.nodes.length
+      approach: cur.d, apN: cur.nodes.length, ringN: r.nodes.length,
+      district: r.zone !== undefined && r.zone >= 0 ? o.districts.zones[r.zone].name : null
     };
     var mask = new Uint8Array(g.E);
     for (var k = 0; k < edges.length; k++) mask[edges[k]] = 1;
@@ -260,6 +324,33 @@ function createGenerator(g, o) {
     var clean = noRepeat ? overlap <= Math.max(60, 0.015 * ring) : ov <= 0.2;
     if (err <= tol && clean) accepted.push(cand);
     else if (err <= 0.35 && ov <= (noRepeat ? 0.1 : 0.3)) fallback.push(cand);
+  }
+
+  /* Дальняя от старта кольца точка в нужном секторе или районе; для «строго» — кольцо внутри районов. */
+  function directionOk(r) {
+    var far = r.nodes[0], fd = 0;
+    for (var i = 0; i < r.nodes.length; i++) { var d = dist(r.nodes[i], A); if (d > fd) { fd = d; far = r.nodes[i]; } }
+    if (dirPool && (fd < 200 || angleOff(far, A) > o.dir.spread)) return false;
+    if (!zones) return true;
+    var zf = inZone[far];
+    if (o.districts.mode === 'all') {
+      if (zf < 0) return false;
+      var hit = {};
+      for (var j = 0; j < r.nodes.length; j++) if (inZone[r.nodes[j]] >= 0) hit[inZone[r.nodes[j]]] = 1;
+      for (var z = 0; z < zones.length; z++) if (!hit[zones[z]]) return false;
+    } else if (zf !== curZone) return false;
+    if (strict) {
+      var first = -1, last = -1;
+      for (var k = 0; k < r.nodes.length; k++) if (inZone[r.nodes[k]] >= 0) { if (first < 0) first = k; last = k; }
+      var out = 0, tot = 0;
+      for (var e = 0; e < r.edges.length; e++) {
+        tot += g.eLen[r.edges[e]];
+        if (e >= first && e < last && inZone[r.nodes[e]] < 0 && inZone[r.nodes[e + 1]] < 0) out += g.eLen[r.edges[e]];
+      }
+      if (out > 0.03 * tot) return false;
+    }
+    r.zone = zf;
+    return true;
   }
 
   function similarity(a, b) {
@@ -321,6 +412,14 @@ function createGenerator(g, o) {
       return b.score - a.score;
     });
     var picked = [];
+    /* «один район на вариант»: сначала по лучшему варианту в каждый район */
+    if (zones && zones.length > 1 && o.districts.mode !== 'all') {
+      var got = {};
+      for (var pi = 0; pi < pool1.length && picked.length < count; pi++) {
+        var pc = pool1[pi];
+        if (pc.district && !got[pc.district]) { got[pc.district] = 1; picked.push(pc); }
+      }
+    }
     [0.5, 0.7, 0.9].forEach(function (lim) {
       for (var i = 0; i < pool1.length && picked.length < count; i++) {
         var cand = pool1[i];
@@ -343,7 +442,7 @@ function createGenerator(g, o) {
 
   return {
     run: run, results: results, state: state,
-    progress: function () { return { attempts: attempts, max: maxAttempts, accepted: accepted.length }; },
+    progress: function () { return { attempts: attempts, max: maxAttempts, accepted: accepted.length, dirRejects: dirRejects }; },
     poolSize: pool.length
   };
 }

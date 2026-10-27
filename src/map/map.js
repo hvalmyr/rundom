@@ -77,7 +77,7 @@ export function createMap() {
     '<line x1="0" y1="0" x2="0" y2="7" style="stroke:var(--carmine);stroke-width:1.6;opacity:.5"/></pattern></defs>');
 
   const layers = {};
-  ['zones', 'explored', 'closed', 'gates', 'blocks', 'osm', 'routes', 'draft', 'km', 'home', 'ab'].forEach((k) => { layers[k] = L.layerGroup().addTo(map); });
+  ['districts', 'zones', 'compass', 'explored', 'closed', 'gates', 'blocks', 'osm', 'routes', 'draft', 'km', 'home', 'ab'].forEach((k) => { layers[k] = L.layerGroup().addTo(map); });
 
   map.on('moveend', () => {
     const c = map.getCenter();

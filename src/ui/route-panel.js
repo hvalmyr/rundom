@@ -16,6 +16,7 @@ export function initRoutePanel(app) {
 
   function renderAB() {
     layers.ab.clearLayers();
+    app.emit('origin');
     if (store.prefs.startMode === 'home') return;
     for (const k of ['A', 'B']) {
       const p = store[k];
@@ -110,7 +111,7 @@ export function initRoutePanel(app) {
     for (const km of p.kmPresets) {
       const chip = el('button', {
         class: 'chip', type: 'button', 'aria-pressed': String(km === p.km),
-        title: 'Правый клик или долгое нажатие — удалить', onclick: () => { p.km = km; renderKm(); save(); }
+        title: 'Правый клик или долгое нажатие — удалить', onclick: () => { p.km = km; renderKm(); save(); app.emit('km'); }
       }, fmtNum(km));
       let press = null;
       const remove = () => {
@@ -135,7 +136,7 @@ export function initRoutePanel(app) {
     input.addEventListener('input', () => {
       const v = parse();
       if (v === null) return;
-      p.km = v; save();
+      p.km = v; save(); app.emit('km');
       box.querySelectorAll('.chip[aria-pressed]').forEach((c) => c.setAttribute('aria-pressed', 'false'));
     });
     const add = el('button', {
@@ -359,7 +360,9 @@ export function initRoutePanel(app) {
         if (s) attract.push(s.node);
       }
 
+      const direction = await app.directionSpec();
       S.lastGen = {
+        dir: direction && direction.dir, districts: direction && direction.districts, dirLabel: direction && direction.label,
         g, A: sA.node, B: sB.node, length: Lm, tol: prefs.tol, forced, attract, loop,
         exits, ringStart: ringNode, approachMax: prefs.approachMax, noRepeat: !prefs.allowRepeats,
         prefs: { appeal: prefs.appeal / 100, mainAvoid: prefs.main / 100, novelty: prefs.novelty / 100, poi: prefs.poi / 100 }
@@ -369,15 +372,25 @@ export function initRoutePanel(app) {
       S.sel = S.routes.length ? 0 : -1;
       const limits = [nBlocked ? 'закрытий и зон' : '', prefs.allowRepeats ? '' : 'правила без повторов'].filter(Boolean).join(' и ');
       if (!S.routes.length) {
-        say('Не удалось подобрать маршрут нужной длины' + (limits ? ' с учётом ' + limits : '') + '. Измените дистанцию, увеличьте допуск' +
-          (prefs.allowRepeats ? '' : ', разрешите повторы улиц') + ' или сдвиньте точки.', 'warn');
+        if (direction && res.dirRejects > res.attempts / 3) {
+          say(direction.dir
+            ? 'В направлении ' + direction.label + ' кольцо ' + fmtNum(prefs.km) + ' км не получилось. Расширьте точность направления или измените дистанцию.'
+            : (prefs.distStrict
+              ? 'Строго внутри районов (' + direction.label + ') кольцо ' + fmtNum(prefs.km) + ' км не помещается. Попробуйте «По возможности» или уменьшите дистанцию.'
+              : 'Кольцо ' + fmtNum(prefs.km) + ' км не дотягивается дальней точкой до районов: ' + direction.label + '. Измените дистанцию или районы.'), 'warn');
+        } else {
+          say('Не удалось подобрать маршрут нужной длины' + (limits ? ' с учётом ' + limits : '') + '. Измените дистанцию, увеличьте допуск' +
+            (prefs.allowRepeats ? '' : ', разрешите повторы улиц') + ' или сдвиньте точки.', 'warn');
+        }
       } else {
         let msg = 'Вариантов: ' + S.routes.length + '.';
         if (res.approx) {
           const best = S.routes.reduce((a, r) => (r.err < a.err ? r : a));
-          msg += ' Точно в допуск' + (limits ? ' с учётом ' + limits : '') + ' не попали: ближайший вариант ' + fmtKm(best.length) + ' км.';
+          if (S.routes.every((r) => !r.off)) msg += ' Совсем без повторов улиц не получилось: показаны варианты с наименьшими повторами.';
+          else msg += ' Точно в допуск' + (limits ? ' с учётом ' + limits : '') + ' не попали: ближайший вариант ' + fmtKm(best.length) + ' км.';
         }
         if (lostExits) msg += ' Выходов без пути к улицам: ' + lostExits + '.';
+        if (res.unreachable.length) msg += ' ' + unreachableText(res.unreachable, Lm) + ' Эти районы пропущены.';
         if (skipped) msg += ' Мест вне зоны или за закрытыми проходами пропущено: ' + skipped + '.';
         if (sA.dist > 100 || sB.dist > 100) msg += ' Старт или финиш сдвинуты к ближайшей улице.';
         say(msg);
@@ -394,6 +407,12 @@ export function initRoutePanel(app) {
 
   async function runGenerator(o, count, ac, from) {
     const gen = Core.createGenerator(o.g, { ...o, count, seed: (Math.random() * 1e9) | 0, maxAttempts: 200 });
+    if (gen.state.error === 'dir') throw new Error('В направлении ' + o.dirLabel + ' от старта нет улиц в загруженной зоне. Поверните стрелку или расширьте точность.');
+    if (gen.state.error === 'districts') {
+      throw new Error(gen.state.unreachable.length
+        ? unreachableText(gen.state.unreachable, o.length) + ' Измените дистанцию или районы.'
+        : 'В выбранных районах нет улиц в зоне загрузки. Выберите районы ближе к старту.');
+    }
     if (gen.state.error === 'exits') throw new Error('От выходов из дома некуда начать кольцо. Увеличьте предел подводки или проверьте зоны рядом с домом.');
     if (gen.state.error) throw new Error('В зоне слишком мало улиц для такой длины. Уменьшите дистанцию или сдвиньте старт.');
     while (!gen.run(35)) {
@@ -404,8 +423,22 @@ export function initRoutePanel(app) {
       if (ac.signal.aborted) throw new DOMException('Отменено', 'AbortError');
     }
     const res = gen.results();
-    for (const r of res.routes) { r.id = uid(); r.loop = o.loop; r.name = Core.routeTitle(r.metrics, 'Маршрут ' + fmtKm(r.length) + ' км'); }
+    res.dirRejects = gen.progress().dirRejects;
+    res.unreachable = gen.state.unreachable || [];
+    for (const r of res.routes) {
+      r.id = uid(); r.loop = o.loop;
+      const title = Core.routeTitle(r.metrics, 'Маршрут ' + fmtKm(r.length) + ' км');
+      const district = r.district || app.districtName(r.ringCoords || r.coords);
+      r.name = district && !title.includes(district) ? district + ' · ' + title : title;
+    }
     return res;
+  }
+
+  /* «Якиманка дальше 4,6 км — кольцо 9 км до неё не дотянется.» */
+  function unreachableText(list, Lm) {
+    const one = list.length === 1;
+    return list.map((u) => u.name + (isFinite(u.dist) ? ' дальше ' + fmtKm(u.dist) + ' км' : ' вне зоны загрузки')).join(', ') +
+      ': кольцо ' + fmtKm(Lm) + ' км до ' + (one ? 'него' : 'них') + ' не дотянется.';
   }
 
   /* Доля общих улиц двух маршрутов (по длине). */
