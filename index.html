@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>rundom</title>
 <meta name="description" content="Беговые маршруты по Москве и улицы, которые вы уже пробежали">
-<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5f5f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141414" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700&display=swap">
@@ -139,7 +139,7 @@
       <details class="more" id="blocksBox">
         <summary>Закрытия и зоны <span class="muted" id="blocksCount"></span></summary>
         <div class="blocks">
-          <div class="chips">
+          <div class="btns">
             <button class="btn small" id="addClosed" type="button">+ Закрыто</button>
             <button class="btn small" id="addZone" type="button">+ Зона</button>
             <button class="btn small" id="addCircle" type="button">+ Круг</button>
@@ -164,7 +164,7 @@
 
     <!-- ===== Библиотека ===== -->
     <section class="tabpane" id="pane-library" role="tabpanel" aria-labelledby="tab-library" hidden>
-      <div class="row">
+      <div class="btns">
         <button class="btn own" id="importGpx" type="button">Загрузить GPX</button>
         <button class="btn" id="drawBtn" type="button">Отметить вручную</button>
         <input class="hidden-input" id="gpxFiles" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple tabindex="-1">
@@ -185,7 +185,7 @@
       <p class="hint">Карта покрытия улиц внутри МКАД с процентами по районам, парки и достопримечательности появятся здесь в следующих этапах.</p>
       <h2 class="sec">Места из OpenStreetMap</h2>
       <label class="check"><input type="checkbox" id="showOsm"><span>Показывать на карте<small>Смотровые, достопримечательности, памятники, фонтаны, парки. Нажмите на место, чтобы маршрут прошёл через него</small></span></label>
-      <div class="row"><button class="btn" id="loadOsm" type="button">Загрузить в видимой области</button></div>
+      <div class="btns"><button class="btn" id="loadOsm" type="button">Загрузить в видимой области</button></div>
       <div class="coord" id="osmInfo"></div>
     </section>
   </aside>
@@ -197,7 +197,7 @@
       <label><input type="checkbox" id="lyGates"><span class="sw gates"></span>Закрытые проходы</label>
       <label><input type="checkbox" id="lyPlaces"><span class="sw places"></span>Места</label>
     </div>
-    <div class="banner" id="banner" hidden><span id="bannerText"></span><button type="button" id="bannerOk" hidden>Готово</button><button type="button" id="bannerUndo" hidden>Отменить точку</button><button type="button" id="bannerCancel">Отмена</button></div>
+    <div class="banner" id="banner" hidden><span id="bannerText"></span><div class="btns"><button type="button" id="bannerOk" hidden>Готово</button><button type="button" id="bannerUndo" hidden>Отменить точку</button><button type="button" id="bannerCancel">Отмена</button></div></div>
   </section>
 </div>
 
@@ -221,7 +221,7 @@
     <div class="field">
       <span class="lbl">Резервная копия</span>
       <p class="hint">Всё хранится только в этом браузере. Сохраните копию, чтобы перенести данные на другое устройство.</p>
-      <div class="row">
+      <div class="btns">
         <button class="btn" id="exportData" type="button">Скачать копию</button>
         <button class="btn" id="importData" type="button">Загрузить копию</button>
         <input class="hidden-input" id="dataFile" type="file" accept=".json,application/json" tabindex="-1">

@@ -93,6 +93,10 @@ h2.sec { margin: var(--space-2) 0 0; font-size: 15px; line-height: 20px; font-we
 .btn.big { width: 100%; padding: 11px 16px; font-weight: 600; font-size: 15px; }
 .btn.small { min-height: 30px; padding: 4px 10px; font-size: 13px; }
 .btn[disabled] { opacity: .55; cursor: default; }
+/* отдельная кнопка — на всю ширину, равнозначные — поровну */
+.tabpane > .btn { width: 100%; }
+.btns { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-2); }
+.btns > .btn { min-width: 0; }
 
 /* ---------- чипы и переключатели ---------- */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -180,7 +184,7 @@ details.more[open] summary::after { content: "−"; }
 .route .figs { grid-column: 1 / -1; display: flex; gap: var(--space-3); font-weight: 500; font-variant-numeric: tabular-nums; }
 .route .meta { grid-column: 1 / -1; color: var(--ink-muted); font-size: 12px; line-height: 16px; }
 .route .note { grid-column: 1 / -1; color: var(--danger); font-size: 12px; line-height: 16px; }
-.route .actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.route .actions { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin-top: var(--space-2); }
 .route .len { font: 600 15px/20px var(--font-display); font-variant-numeric: tabular-nums; }
 
 .star {
@@ -234,10 +238,10 @@ details.more[open] summary::after { content: "−"; }
 .banner {
   position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 600; max-width: calc(100% - 24px);
   background: var(--ink); color: var(--paper); padding: 9px 12px; border-radius: var(--radius-md); box-shadow: var(--shadow-float);
-  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
+  display: flex; flex-direction: column; gap: 8px; width: min(440px, calc(100% - 24px)); text-align: center;
 }
 .banner[hidden] { display: none; }
-.banner button { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--radius-sm); padding: 3px 9px; cursor: pointer; }
+.banner button { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--radius-sm); padding: 5px 9px; cursor: pointer; }
 .toast {
   position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 2000;
   max-width: min(520px, calc(100% - 32px)); background: var(--ink); color: var(--paper); padding: 10px 14px;

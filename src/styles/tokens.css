@@ -1,10 +1,10 @@
 /* rundom design tokens — generated from the rundom design system (tokens.json). Edit there, then regenerate. */
 :root {
-  --paper: #f6f4ef;
-  --surface: #fffdf8;
-  --surface-sunk: #eeebe3;
-  --line: #ddd8cc;
-  --line-strong: #8e8778;
+  --paper: #f5f5f5;
+  --surface: #ffffff;
+  --surface-sunk: #ebebeb;
+  --line: #d9d9d9;
+  --line-strong: #8a8a8a;
   --ink: #14222a;
   --ink-muted: #5e6870;
   --petrol: #0e5a73;
@@ -18,13 +18,13 @@
   --warning: #7a5200;
   --focus: var(--petrol);
   --danger: var(--carmine-strong);
-  --map-ground: #eeebe3;
-  --map-street: #d6d1c4;
-  --map-unrun: #c4bdaf;
+  --map-ground: #ebebeb;
+  --map-street: #d4d4d4;
+  --map-unrun: #bfbfbf;
   --map-explored: #4e95ab;
   --map-route: var(--carmine);
   --map-district: var(--petrol);
-  --map-gate-osm: #8e8778;
+  --map-gate-osm: #8a8a8a;
   --shadow-float: 0 1px 2px rgba(20,34,42,0.08), 0 8px 24px rgba(20,34,42,0.10);
   --space-1: 4px;
   --space-2: 8px;
@@ -49,13 +49,13 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #151412;
-    --surface: #1d1c19;
-    --surface-sunk: #100f0e;
-    --line: #2c2a26;
-    --line-strong: #736d62;
-    --ink: #ece8df;
-    --ink-muted: #8f8a7f;
+    --paper: #141414;
+    --surface: #1c1c1c;
+    --surface-sunk: #0f0f0f;
+    --line: #2a2a2a;
+    --line-strong: #6e6e6e;
+    --ink: #ebebeb;
+    --ink-muted: #8c8c8c;
     --petrol: #5bb3cf;
     --petrol-strong: #8acde2;
     --petrol-tint: #12313b;
@@ -65,23 +65,23 @@
     --carmine-tint: #3b1219;
     --on-carmine: #24060b;
     --warning: #e9b44c;
-    --map-ground: #1a1916;
-    --map-street: #33302b;
-    --map-unrun: #423e37;
+    --map-ground: #191919;
+    --map-street: #303030;
+    --map-unrun: #3e3e3e;
     --map-explored: #2f7f98;
-    --map-gate-osm: #736d62;
+    --map-gate-osm: #6e6e6e;
     --shadow-float: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --paper: #151412;
-  --surface: #1d1c19;
-  --surface-sunk: #100f0e;
-  --line: #2c2a26;
-  --line-strong: #736d62;
-  --ink: #ece8df;
-  --ink-muted: #8f8a7f;
+  --paper: #141414;
+  --surface: #1c1c1c;
+  --surface-sunk: #0f0f0f;
+  --line: #2a2a2a;
+  --line-strong: #6e6e6e;
+  --ink: #ebebeb;
+  --ink-muted: #8c8c8c;
   --petrol: #5bb3cf;
   --petrol-strong: #8acde2;
   --petrol-tint: #12313b;
@@ -91,11 +91,11 @@
   --carmine-tint: #3b1219;
   --on-carmine: #24060b;
   --warning: #e9b44c;
-  --map-ground: #1a1916;
-  --map-street: #33302b;
-  --map-unrun: #423e37;
+  --map-ground: #191919;
+  --map-street: #303030;
+  --map-unrun: #3e3e3e;
   --map-explored: #2f7f98;
-  --map-gate-osm: #736d62;
+  --map-gate-osm: #6e6e6e;
   --shadow-float: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
   color-scheme: dark;
 }
