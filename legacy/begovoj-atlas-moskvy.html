@@ -1,0 +1,2335 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Беговой атлас Москвы</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600&family=Onest:wght@400;500;600&family=Unbounded:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Раскладка: слева панель управления, справа карта. На телефоне карта сверху и прилипает, панель прокручивается под ней. */
+:root {
+  --bg: #EDF1EE;
+  --panel: #FAFBF9;
+  --field: #FFFFFF;
+  --ink: #14201C;
+  --muted: #586861;
+  --line: #D3DCD7;
+  --soft: #E6ECE8;
+  --accent: #1560BD;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DCE8F8;
+  --explored: #7A3FA8;
+  --warn: #B3261E;
+  --warn-soft: #F8E3E1;
+  --ok: #1B7F46;
+  --shadow: 0 1px 2px rgba(20, 32, 28, .08), 0 8px 24px rgba(20, 32, 28, .10);
+  --font-body: "Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Unbounded", "Onest", system-ui, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1513; --panel: #151D1A; --field: #1C2622; --ink: #E5EEE9; --muted: #98A9A1; --line: #2B3833;
+    --soft: #1E2924; --accent: #5BA2F2; --accent-ink: #0B1420; --accent-soft: #1B2D45; --explored: #B78AE0;
+    --warn: #FF8F86; --warn-soft: #3A1D1B; --ok: #62D48F;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1513; --panel: #151D1A; --field: #1C2622; --ink: #E5EEE9; --muted: #98A9A1; --line: #2B3833;
+  --soft: #1E2924; --accent: #5BA2F2; --accent-ink: #0B1420; --accent-soft: #1B2D45; --explored: #B78AE0;
+  --warn: #FF8F86; --warn-soft: #3A1D1B; --ok: #62D48F;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 var(--font-body);
+  -webkit-text-size-adjust: 100%;
+}
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app {
+  display: grid;
+  grid-template-columns: 400px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100dvh;
+}
+
+/* ---------- шапка ---------- */
+.top {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand svg { flex: none; color: var(--accent); }
+.brand h1 {
+  margin: 0; font: 600 15px/1.2 var(--font-display); letter-spacing: -.01em; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.top .spacer { flex: 1; }
+.ghost {
+  background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer;
+}
+.ghost:hover { background: var(--soft); }
+
+/* ---------- панель ---------- */
+.panel { overflow: auto; background: var(--panel); border-right: 1px solid var(--line); min-width: 0; }
+.tabs {
+  position: sticky; top: 0; z-index: 3; display: grid; grid-template-columns: repeat(4, 1fr);
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.tabs button {
+  background: none; border: 0; border-bottom: 2px solid transparent; padding: 11px 4px 9px; cursor: pointer;
+  color: var(--muted); font-weight: 500;
+}
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tabpane { padding: 16px max(16px, env(safe-area-inset-left, 0px)) 28px 16px; display: flex; flex-direction: column; gap: 16px; }
+.tabpane[hidden] { display: none; }
+
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; position: relative; }
+.lbl {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+}
+.row { display: flex; gap: 8px; align-items: center; min-width: 0; flex-wrap: wrap; }
+.row > input[type="search"], .row > input[type="text"] { flex: 1 1 140px; min-width: 0; }
+input[type="search"], input[type="text"], input[type="number"], select {
+  background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-height: 36px;
+}
+input[type="number"] { width: 84px; font-family: var(--font-num); }
+.coord { font: 12px/1.3 var(--font-num); color: var(--muted); }
+.coord.set { color: var(--ink); }
+
+.iconbtn {
+  width: 36px; height: 36px; flex: none; display: inline-grid; place-items: center; cursor: pointer;
+  background: var(--field); border: 1px solid var(--line); border-radius: 6px;
+}
+.iconbtn:hover { background: var(--soft); }
+.iconbtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.btn {
+  border: 1px solid var(--line); background: var(--field); border-radius: 6px; padding: 8px 12px; cursor: pointer;
+  min-height: 36px; font-weight: 500;
+}
+.btn:hover { background: var(--soft); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.big { width: 100%; padding: 12px; font-weight: 600; font-size: 15px; }
+.btn.danger { color: var(--warn); }
+.btn.small { min-height: 30px; padding: 4px 9px; font-size: 13px; }
+.btn[disabled] { opacity: .55; cursor: default; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--line); background: var(--field); border-radius: 999px; padding: 4px 11px; cursor: pointer;
+  font-family: var(--font-num); font-size: 12.5px;
+}
+.chip:hover { background: var(--soft); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.tag {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--soft);
+  border-radius: 6px; padding: 3px 4px 3px 9px; font-size: 13px;
+}
+.tag button { border: 0; background: none; cursor: pointer; padding: 0 4px; font-size: 16px; line-height: 1; color: var(--muted); }
+
+.check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+.check small { display: block; color: var(--muted); }
+
+.sliders { display: flex; flex-direction: column; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); }
+.slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
+.slider label { font-weight: 500; }
+.slider output { font: 12px var(--font-num); color: var(--muted); }
+.slider input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 2px 0 0; }
+.slider .ends { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); }
+
+.sug {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 30; margin-top: 2px; background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow); max-height: 260px; overflow: auto;
+}
+.sug button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 9px 10px; cursor: pointer; }
+.sug button:hover { background: var(--soft); }
+.sug small { display: block; color: var(--muted); }
+
+.status { margin: 0; min-height: 20px; color: var(--muted); }
+.status.warn { color: var(--warn); }
+.status.ok { color: var(--ok); }
+progress { width: 100%; height: 6px; accent-color: var(--accent); }
+progress[hidden] { display: none; }
+
+/* ---------- карточки маршрутов ---------- */
+.results { display: flex; flex-direction: column; gap: 10px; }
+.route {
+  border: 1px solid var(--line); border-radius: 8px; background: var(--field); padding: 12px; display: flex;
+  flex-direction: column; gap: 8px; cursor: pointer;
+}
+.route[aria-current="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.route header { display: flex; align-items: center; gap: 10px; }
+.swatch { width: 14px; height: 14px; border-radius: 50%; background: var(--c); border: 2px solid var(--field); box-shadow: 0 0 0 1px var(--c); flex: none; }
+.route h3 { margin: 0; font: 600 14px var(--font-display); flex: 1; }
+.route .len { font: 600 18px var(--font-num); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px 12px; margin: 0; }
+.stats div { display: flex; flex-direction: column; }
+.stats dt { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.stats dd { margin: 0; font: 500 13.5px var(--font-num); }
+.route p { margin: 0; color: var(--muted); font-size: 13px; }
+.route .note { color: var(--warn); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- списки ---------- */
+.list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--field); }
+.list:empty { display: none; }
+.item { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-bottom: 1px solid var(--line); min-width: 0; }
+.item:last-child { border-bottom: 0; }
+.item .grow { flex: 1; min-width: 0; }
+.item .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .meta { font-size: 12px; color: var(--muted); }
+.note-box { padding: 10px 12px; border-radius: 8px; background: var(--soft); color: var(--muted); font-size: 13px; }
+.note-box.warn { background: var(--warn-soft); color: var(--warn); }
+h2.sec { margin: 4px 0 0; font: 600 13px var(--font-display); }
+.legend { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; font-size: 13px; }
+.legend .sw { width: 22px; height: 0; border-top: 5px solid var(--c); border-radius: 3px; opacity: .8; }
+.legend .sw.dash { border-top: 2px dashed var(--c); opacity: 1; }
+.hidden-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- карта ---------- */
+.mapwrap { position: relative; min-height: 0; min-width: 0; }
+#map { position: absolute; inset: 0; background: var(--soft); }
+#map.picking { cursor: crosshair; }
+#map.picking .leaflet-grab { cursor: crosshair; }
+.maptools {
+  position: absolute; top: 10px; right: 10px; z-index: 500; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px;
+  font-size: 13px;
+}
+.maptools label { display: flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap; }
+.maptools input { accent-color: var(--accent); }
+.maptools .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+.banner {
+  position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 600; max-width: calc(100% - 24px);
+  background: var(--ink); color: var(--bg); padding: 9px 12px; border-radius: 8px; box-shadow: var(--shadow);
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
+}
+.banner[hidden] { display: none; }
+.banner button { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+.toast {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 2000; max-width: min(520px, calc(100% - 24px));
+  background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 8px; box-shadow: var(--shadow);
+}
+.toast[hidden] { display: none; }
+
+/* маркеры */
+.pin {
+  width: 30px; height: 30px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg); display: grid; place-items: center;
+  border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); color: #fff; font: 700 13px var(--font-display);
+}
+.pin span { transform: rotate(45deg); }
+.pin-a { background: #1B7F46; }
+.pin-b { background: #B3261E; }
+.kmdot {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #14201C; color: #fff;
+  border: 2px solid #fff; font: 600 11px var(--font-num); box-shadow: 0 1px 4px rgba(0, 0, 0, .4);
+}
+.poi {
+  width: 16px; height: 16px; transform: rotate(45deg); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .4);
+  background: var(--c, #E88A1A); border-radius: 3px;
+}
+.poi.osm { width: 12px; height: 12px; opacity: .85; }
+.poi.is-via { outline: 3px solid #14201C; outline-offset: 1px; }
+.gate {
+  width: 16px; height: 16px; border-radius: 50%; background: #B3261E; border: 2px solid #fff; display: grid; place-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+}
+.gate::after { content: ""; width: 8px; height: 2px; background: #fff; }
+.draftpt { width: 10px; height: 10px; border-radius: 50%; background: var(--explored); border: 2px solid #fff; }
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel); color: var(--ink); }
+.leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+.pop { display: flex; flex-direction: column; gap: 6px; min-width: 170px; }
+.pop .sub { color: var(--muted); font-size: 12.5px; }
+.popbtns { display: flex; gap: 6px; flex-wrap: wrap; }
+.popbtns button { border: 1px solid var(--line); background: var(--field); border-radius: 6px; padding: 4px 9px; cursor: pointer; }
+.popbtns button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.88) saturate(.55); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.88) saturate(.55); }
+}
+
+@media (max-width: 860px) {
+  .app { display: flex; flex-direction: column; height: auto; min-height: 100dvh; }
+  .top { order: 0; }
+  .mapwrap { order: 1; position: sticky; top: 0; height: 46dvh; z-index: 20; border-bottom: 1px solid var(--line); }
+  .panel { order: 2; overflow: visible; border-right: 0; }
+  .tabs { top: 46dvh; }
+  .maptools { top: 8px; right: 8px; padding: 6px 8px; font-size: 12.5px; }
+  .tabpane { padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <path d="M3 21 C8 21 8 8 13 8 S19 20 25 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="3" cy="21" r="2.6" fill="currentColor"/><circle cx="13" cy="8" r="2.6" fill="currentColor"/><circle cx="25" cy="7" r="2.6" fill="currentColor"/>
+      </svg>
+      <h1>Беговой атлас Москвы</h1>
+    </div>
+    <div class="spacer"></div>
+    <button class="ghost" id="themeBtn" type="button" title="Тема оформления">Тема: авто</button>
+  </header>
+
+  <aside class="panel" id="panel">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-route" aria-controls="pane-route" aria-selected="true" type="button">Маршрут</button>
+      <button role="tab" id="tab-explored" aria-controls="pane-explored" aria-selected="false" type="button">Изучено</button>
+      <button role="tab" id="tab-places" aria-controls="pane-places" aria-selected="false" type="button">Места</button>
+      <button role="tab" id="tab-more" aria-controls="pane-more" aria-selected="false" type="button">Ещё</button>
+    </div>
+
+    <!-- ===== Маршрут ===== -->
+    <section class="tabpane" id="pane-route" role="tabpanel" aria-labelledby="tab-route">
+      <div class="field">
+        <label class="lbl" for="qA">Старт, точка A</label>
+        <div class="row">
+          <input id="qA" type="search" placeholder="Адрес, место или 55.7558, 37.6173" autocomplete="off">
+          <button class="iconbtn" id="pickA" type="button" aria-pressed="false" title="Указать на карте" aria-label="Указать точку A на карте">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+          </button>
+          <button class="iconbtn" id="locA" type="button" title="Моё местоположение" aria-label="Взять моё местоположение">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8z"/></svg>
+          </button>
+        </div>
+        <div class="coord" id="infoA">не задана</div>
+        <div class="sug" id="sugA" hidden></div>
+      </div>
+
+      <label class="check"><input type="checkbox" id="loop"><span>Финиш там же: круговой маршрут<small>Без галочки можно задать отдельный финиш B</small></span></label>
+
+      <div class="field" id="fieldB" hidden>
+        <label class="lbl" for="qB">Финиш, точка B</label>
+        <div class="row">
+          <input id="qB" type="search" placeholder="Адрес, место или координаты" autocomplete="off">
+          <button class="iconbtn" id="pickB" type="button" aria-pressed="false" title="Указать на карте" aria-label="Указать точку B на карте">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+          </button>
+        </div>
+        <div class="coord" id="infoB">не задана</div>
+        <div class="sug" id="sugB" hidden></div>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Дистанция</span>
+        <div class="row">
+          <input id="km" type="number" min="1" max="60" step="0.5" value="10" aria-label="Дистанция в километрах"> <span>км, допуск</span>
+          <select id="tol" aria-label="Допустимое отклонение длины">
+            <option value="0.05">±5%</option><option value="0.08">±8%</option><option value="0.12">±12%</option>
+          </select>
+        </div>
+        <div class="chips" id="kmChips">
+          <button class="chip" type="button" data-km="5">5</button>
+          <button class="chip" type="button" data-km="8">8</button>
+          <button class="chip" type="button" data-km="10">10</button>
+          <button class="chip" type="button" data-km="15">15</button>
+          <button class="chip" type="button" data-km="21.1">21,1</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Обязательно пройти через</span>
+        <div class="chips" id="forcedList"></div>
+        <div class="coord" id="forcedHint">Выберите место на карте во вкладке «Места» или в его окошке на карте</div>
+      </div>
+
+      <div class="sliders">
+        <div class="slider">
+          <label for="prefMain">Обходить большие дороги</label><output id="outMain"></output>
+          <input type="range" id="prefMain" min="0" max="100" step="5">
+        </div>
+        <div class="slider">
+          <label for="prefAppeal">Тропы, парки, пешеходные улицы</label><output id="outAppeal"></output>
+          <input type="range" id="prefAppeal" min="0" max="100" step="5">
+        </div>
+        <div class="slider">
+          <label for="prefNovelty">Новизна улиц</label><output id="outNovelty"></output>
+          <input type="range" id="prefNovelty" min="-100" max="100" step="10">
+          <div class="ends"><span>знакомые</span><span>новые</span></div>
+        </div>
+        <div class="slider">
+          <label for="prefPoi">Интересные места рядом</label><output id="outPoi"></output>
+          <input type="range" id="prefPoi" min="0" max="100" step="5">
+        </div>
+      </div>
+
+      <label class="check"><input type="checkbox" id="avoidSteps"><span>Без лестниц</span></label>
+      <label class="check"><input type="checkbox" id="strictGates"><span>Строго к шлагбаумам<small>Шлагбаумы с access=private считать закрытыми. Обычные ворота с этим тегом закрыты всегда</small></span></label>
+
+      <div class="field">
+        <span class="lbl">Метки и темп</span>
+        <div class="row">
+          <span>Метка каждые</span>
+          <select id="kmStep" aria-label="Шаг километровых меток">
+            <option value="0.5">0,5 км</option><option value="1">1 км</option><option value="2">2 км</option><option value="3">3 км</option><option value="5">5 км</option><option value="10">10 км</option>
+          </select>
+          <span>темп</span>
+          <input id="pace" type="text" inputmode="numeric" value="6:00" size="5" style="width:72px;font-family:var(--font-num)" aria-label="Темп, минут на километр"><span>/км</span>
+        </div>
+      </div>
+
+      <button class="btn primary big" id="go" type="button">Построить маршруты</button>
+      <button class="btn big" id="cancel" type="button" hidden>Отменить</button>
+      <progress id="prog" max="100" value="0" hidden></progress>
+      <p class="status" id="status" role="status"></p>
+      <div class="results" id="results"></div>
+    </section>
+
+    <!-- ===== Изучено ===== -->
+    <section class="tabpane" id="pane-explored" role="tabpanel" aria-labelledby="tab-explored" hidden>
+      <div class="note-box">Фиолетовым на карте закрашены улицы, по которым вы уже бегали. Ползунок «Новизна улиц» во вкладке «Маршрут» использует эти данные, чтобы вести вас по новым местам или по знакомым.</div>
+      <div class="row">
+        <button class="btn" id="importGpx" type="button">Загрузить GPX пробежек</button>
+        <button class="btn" id="drawBtn" type="button">Отметить вручную</button>
+        <input class="hidden-input" id="gpxFiles" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple tabindex="-1">
+      </div>
+      <div class="coord" id="exploredTotal"></div>
+      <div class="list" id="exploredList"></div>
+    </section>
+
+    <!-- ===== Места ===== -->
+    <section class="tabpane" id="pane-places" role="tabpanel" aria-labelledby="tab-places" hidden>
+      <div class="row">
+        <button class="btn" id="addPlaceBtn" type="button">Добавить место на карте</button>
+      </div>
+      <div class="field" id="placeForm" hidden>
+        <label class="lbl" for="placeName">Название места</label>
+        <input id="placeName" type="text" placeholder="Например, видовая у Воробьёвых гор">
+        <label class="lbl" for="placeCat">Тип</label>
+        <select id="placeCat"></select>
+        <div class="row"><button class="btn primary" id="placeSave" type="button">Сохранить</button><button class="btn" id="placeCancel" type="button">Отмена</button></div>
+      </div>
+      <div class="list" id="placesList"></div>
+      <h2 class="sec">Места из OpenStreetMap</h2>
+      <label class="check"><input type="checkbox" id="showOsm"><span>Показывать на карте<small>Смотровые, достопримечательности, памятники, фонтаны, парки</small></span></label>
+      <div class="row"><button class="btn" id="loadOsm" type="button">Загрузить в видимой области</button></div>
+      <div class="coord" id="osmInfo"></div>
+    </section>
+
+    <!-- ===== Ещё ===== -->
+    <section class="tabpane" id="pane-more" role="tabpanel" aria-labelledby="tab-more" hidden>
+      <h2 class="sec">Подложка карты</h2>
+      <select id="tileSel" aria-label="Подложка карты"></select>
+      <h2 class="sec">Обозначения на карте</h2>
+      <div class="legend">
+        <span class="sw" style="--c:var(--explored)"></span><span>Изученные улицы</span>
+        <span class="sw dash" style="--c:#B3261E"></span><span>Пути, закрытые для пешехода (access=private, foot=no)</span>
+        <span class="gate" style="justify-self:center"></span><span>Закрытые ворота и стены: маршрут через них не пройдёт</span>
+        <span class="poi osm" style="--c:#E88A1A;justify-self:center"></span><span>Интересные места</span>
+        <span class="kmdot" style="justify-self:center;width:22px;height:22px">5</span><span>Километровые метки маршрута</span>
+      </div>
+      <h2 class="sec">Резервная копия</h2>
+      <div class="note-box">Изученные улицы и места хранятся в этом браузере. Сохраните копию, чтобы перенести их на другое устройство.</div>
+      <div class="row">
+        <button class="btn" id="exportData" type="button">Скачать копию</button>
+        <button class="btn" id="importData" type="button">Загрузить копию</button>
+        <input class="hidden-input" id="dataFile" type="file" accept=".json,application/json" tabindex="-1">
+      </div>
+      <h2 class="sec">Как строятся маршруты</h2>
+      <div class="note-box">Всё считается в вашем браузере обычным алгоритмом поиска пути A* по графу улиц OpenStreetMap, без нейросетей. Закрытые ворота, частные и служебные проезды в граф не попадают. Данные о воротах берутся из OSM, поэтому там, где их нет на карте, проход может оказаться закрытым. Проверьте маршрут на месте и поправьте OSM, если нашли неточность.</div>
+    </section>
+  </aside>
+
+  <section class="mapwrap">
+    <div id="map" aria-label="Карта"></div>
+    <div class="maptools" id="maptools">
+      <label><input type="checkbox" id="lyExplored"><span class="dot" style="--c:var(--explored)"></span>Изученные</label>
+      <label><input type="checkbox" id="lyPlaces"><span class="dot" style="--c:#E88A1A"></span>Места</label>
+      <label><input type="checkbox" id="lyGates"><span class="dot" style="--c:#B3261E"></span>Закрытые проходы</label>
+    </div>
+    <div class="banner" id="banner" hidden><span id="bannerText"></span><button type="button" id="bannerOk" hidden>Готово</button><button type="button" id="bannerUndo" hidden>Отменить точку</button><button type="button" id="bannerCancel">Отмена</button></div>
+  </section>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* Беговой атлас Москвы: ядро.
+ * Без DOM и без LLM: разбор данных OpenStreetMap, граф улиц, правила проходимости,
+ * поиск пути A*, подбор маршрутов нужной длины, километровые метки, GPX.
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.Core = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  /* ---------- геометрия ---------- */
+  var DEG = Math.PI / 180;
+  var EARTH = 6371008.8;
+  var LAT0 = 55.75;
+  var KX = EARTH * DEG * Math.cos(LAT0 * DEG);
+  var KY = EARTH * DEG;
+
+  function hav(aLat, aLon, bLat, bLon) {
+    var dLat = (bLat - aLat) * DEG, dLon = (bLon - aLon) * DEG;
+    var s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2);
+    var h = s1 * s1 + Math.cos(aLat * DEG) * Math.cos(bLat * DEG) * s2 * s2;
+    return 2 * EARTH * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  function px(lon) { return lon * KX; }
+  function py(lat) { return lat * KY; }
+
+  function bearing(aLat, aLon, bLat, bLon) {
+    var y = Math.sin((bLon - aLon) * DEG) * Math.cos(bLat * DEG);
+    var x = Math.cos(aLat * DEG) * Math.sin(bLat * DEG) -
+      Math.sin(aLat * DEG) * Math.cos(bLat * DEG) * Math.cos((bLon - aLon) * DEG);
+    return (Math.atan2(y, x) / DEG + 360) % 360;
+  }
+
+  function polyLength(c) {
+    var s = 0;
+    for (var i = 1; i < c.length; i++) s += hav(c[i - 1][0], c[i - 1][1], c[i][0], c[i][1]);
+    return s;
+  }
+
+  function distToSegment(x, y, x1, y1, x2, y2) {
+    var dx = x2 - x1, dy = y2 - y1;
+    var l2 = dx * dx + dy * dy;
+    var t = l2 === 0 ? 0 : ((x - x1) * dx + (y - y1) * dy) / l2;
+    t = Math.max(0, Math.min(1, t));
+    var cx = x1 + t * dx, cy = y1 + t * dy;
+    return Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+  }
+
+  /* Упрощение ломаной (Дуглас-Пекер, без рекурсии). tol в метрах. */
+  function simplifyDP(pts, tol) {
+    var n = pts.length;
+    if (n < 3) return pts.slice();
+    var X = new Float64Array(n), Y = new Float64Array(n);
+    for (var i = 0; i < n; i++) { X[i] = px(pts[i][1]); Y[i] = py(pts[i][0]); }
+    var keep = new Uint8Array(n);
+    keep[0] = 1; keep[n - 1] = 1;
+    var stack = [[0, n - 1]];
+    while (stack.length) {
+      var seg = stack.pop(), a = seg[0], b = seg[1];
+      var maxD = 0, idx = -1;
+      for (var k = a + 1; k < b; k++) {
+        var d = distToSegment(X[k], Y[k], X[a], Y[a], X[b], Y[b]);
+        if (d > maxD) { maxD = d; idx = k; }
+      }
+      if (idx !== -1 && maxD > tol) {
+        keep[idx] = 1;
+        stack.push([a, idx]);
+        stack.push([idx, b]);
+      }
+    }
+    var out = [];
+    for (var j = 0; j < n; j++) if (keep[j]) out.push(pts[j]);
+    return out;
+  }
+
+  /* Точки вдоль ломаной через каждые step метров (включая начало и конец). */
+  function resample(pts, step) {
+    if (!pts.length) return [];
+    var out = [[pts[0][0], pts[0][1]]];
+    var carry = 0;
+    for (var i = 1; i < pts.length; i++) {
+      var a = pts[i - 1], b = pts[i];
+      var seg = hav(a[0], a[1], b[0], b[1]);
+      if (seg === 0) continue;
+      var pos = step - carry;
+      while (pos <= seg) {
+        var t = pos / seg;
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        pos += step;
+      }
+      carry = seg - (pos - step);
+    }
+    var last = pts[pts.length - 1];
+    var lo = out[out.length - 1];
+    if (lo[0] !== last[0] || lo[1] !== last[1]) out.push([last[0], last[1]]);
+    return out;
+  }
+
+  /* Попадание точки в многоугольник; ring = плоский массив [x0,y0,x1,y1,...] в метрах. */
+  function pointInRing(x, y, ring) {
+    var inside = false;
+    var n = ring.length / 2;
+    for (var i = 0, j = n - 1; i < n; j = i++) {
+      var xi = ring[2 * i], yi = ring[2 * i + 1], xj = ring[2 * j], yj = ring[2 * j + 1];
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------- правила проходимости ---------- */
+  var PATHLIKE = { pedestrian: 1, footway: 1, path: 1, cycleway: 1, track: 1, bridleway: 1 };
+  var STREET = { living_street: 1, residential: 1, unclassified: 1, service: 1, road: 1 };
+  var ROADS = { tertiary: 1, tertiary_link: 1 };
+  var MAIN = { secondary: 1, secondary_link: 1, primary: 1, primary_link: 1 };
+  var CLOSED_ACCESS = { no: 1, 'private': 1, customers: 1, permit: 1, delivery: 1, agricultural: 1, forestry: 1, military: 1 };
+  var CLS = { path: 0, street: 1, road: 2, main: 3, steps: 4 };
+  var SURFACE = {
+    asphalt: 0, paved: 0, concrete: 0, 'concrete:plates': 0.05, 'concrete:lanes': 0.05, paving_stones: 0.02,
+    sett: 0.1, cobblestone: 0.15, unhewn_cobblestone: 0.3, compacted: 0.05, fine_gravel: 0.08, gravel: 0.2,
+    unpaved: 0.2, dirt: 0.3, earth: 0.3, ground: 0.3, grass: 0.35, mud: 0.8, sand: 0.8, wood: 0.1, metal: 0.05,
+    tartan: 0, rubber: 0, woodchips: 0.15, pebblestone: 0.25
+  };
+
+  function isFootYes(t) { return t.foot === 'yes' || t.foot === 'designated' || t.foot === 'permissive'; }
+
+  /* null: путь не нужен; {ok:false, closed:true}: закрыт для пешехода; {ok:true,...}: проходим. */
+  function classifyWay(t, o) {
+    var hw = t.highway;
+    if (!hw) return null;
+    if (!(PATHLIKE[hw] || STREET[hw] || ROADS[hw] || MAIN[hw] || hw === 'steps')) return null;
+    if (t.indoor === 'yes' || t.indoor === 'room' || t.indoor === 'corridor') return null;
+    if (t.service === 'parking_aisle' || t.service === 'drive-through') return null;
+    var footYes = isFootYes(t);
+    if (t.foot === 'no' || t.foot === 'private' || t.foot === 'use_sidepath') return { ok: false, closed: true, why: 'foot' };
+    if (!footYes && t.access && CLOSED_ACCESS[t.access]) return { ok: false, closed: true, why: 'access' };
+
+    var cls, pen = 0, appeal = 0, fix = 0;
+    if (hw === 'steps') {
+      if (o && o.avoidSteps) return { ok: false, closed: false };
+      cls = CLS.steps; appeal = 0.3;
+    } else if (PATHLIKE[hw]) {
+      cls = CLS.path;
+      var fw = t.footway;
+      if (fw === 'crossing' || t.crossing) { fix = 25; appeal = 0; }
+      else if (fw === 'sidewalk') { appeal = 0; }
+      else if (hw === 'pedestrian') appeal = 0.7;
+      else if (hw === 'track') { appeal = 0.7; if (t.tracktype === 'grade4' || t.tracktype === 'grade5') pen += 0.3; }
+      else appeal = 0.55;
+      if (hw === 'cycleway') pen += 0.05;
+      if (hw === 'bridleway') pen += 0.2;
+    } else if (STREET[hw]) {
+      cls = CLS.street;
+      if (hw === 'living_street') appeal = 0.2;
+      if (hw === 'service') { pen += 0.2; if (t.service === 'driveway') pen += 0.6; }
+      if (hw === 'unclassified') pen += 0.05;
+      if (hw === 'road') pen += 0.1;
+      if (t.access === 'destination') pen += 0.2;
+    } else if (ROADS[hw]) {
+      cls = CLS.road;
+    } else {
+      cls = CLS.main;
+    }
+    var sf = SURFACE[t.surface];
+    if (sf) pen += sf;
+    return { ok: true, cls: cls, pen: pen, appeal: appeal, fix: fix };
+  }
+
+  var GATES = { gate: 1, swing_gate: 1, sliding_gate: 1 };
+  var WALLS = { wall: 1, fence: 1, hedge: 1, retaining_wall: 1, city_wall: 1 };
+
+  /* Закрытые ворота: аналог значка «закрытые ворота» в Organic Maps. */
+  function isBlockingBarrier(t, strict) {
+    var b = t.barrier;
+    if (!b) return false;
+    var footYes = isFootYes(t);
+    if (WALLS[b]) return !footYes;
+    if (!GATES[b] && b !== 'lift_gate') return false;
+    if (footYes) return false;
+    if (t.foot === 'no' || t.foot === 'private') return true;
+    var accessClosed = t.access === 'no' || t.access === 'private' || t.access === 'customers' || t.access === 'permit';
+    if (b === 'lift_gate') return !!strict && accessClosed;
+    return accessClosed || t.locked === 'yes';
+  }
+
+  /* ---------- Overpass: запросы и разбор ---------- */
+  function aroundStr(R, A, B) {
+    var r = Math.round(R);
+    if (!B || hav(A[0], A[1], B[0], B[1]) < 30) return '(around:' + r + ',' + A[0].toFixed(6) + ',' + A[1].toFixed(6) + ')';
+    return '(around:' + r + ',' + A[0].toFixed(6) + ',' + A[1].toFixed(6) + ',' + B[0].toFixed(6) + ',' + B[1].toFixed(6) + ')';
+  }
+
+  function loadRadius(dAB, L, cap) {
+    var c = 1.25;
+    var a = L / (2 * c);
+    var h = dAB / 2;
+    var b = Math.sqrt(Math.max(0, a * a - h * h));
+    var R = Math.max(a - h, b) + 300;
+    return Math.max(900, Math.min(cap || 5000, R));
+  }
+
+  var HW_RE = '^(pedestrian|footway|path|steps|cycleway|track|bridleway|living_street|residential|service|unclassified|tertiary|tertiary_link|secondary|secondary_link|primary|primary_link|road)$';
+  var BARRIER_RE = '^(gate|lift_gate|swing_gate|sliding_gate|wall|fence|hedge|retaining_wall|city_wall)$';
+
+  function networkQuery(area) {
+    return '[out:json][timeout:150][maxsize:536870912];\n' +
+      'way["highway"~"' + HW_RE + '"]' + area + '->.w;\n' +
+      '.w out body qt;\n' +
+      'node(w.w);\nout skel qt;\n' +
+      'node["barrier"~"' + BARRIER_RE + '"]' + area + ';\nout body;';
+  }
+
+  function contextQuery(area) {
+    return '[out:json][timeout:90][maxsize:268435456];\n' +
+      '(\n' +
+      ' way["leisure"~"^(park|garden|nature_reserve)$"]' + area + ';\n' +
+      ' way["landuse"~"^(forest|recreation_ground|village_green)$"]' + area + ';\n' +
+      ' way["natural"="wood"]' + area + ';\n' +
+      ' relation["leisure"~"^(park|garden|nature_reserve)$"]' + area + ';\n' +
+      ' relation["landuse"~"^(forest|recreation_ground)$"]' + area + ';\n' +
+      ');\nout geom qt;\n' +
+      '(\n' +
+      ' nwr["tourism"~"^(attraction|viewpoint|museum|artwork|gallery)$"]' + area + ';\n' +
+      ' nwr["historic"~"^(monument|memorial|castle|fort|ruins|archaeological_site|wayside_cross|city_gate|tower|manor)$"]' + area + ';\n' +
+      ' nwr["man_made"~"^(tower|lighthouse|obelisk)$"]["name"]' + area + ';\n' +
+      ' nwr["amenity"="fountain"]["name"]' + area + ';\n' +
+      ' nwr["waterway"="dam"]' + area + ';\n' +
+      ');\nout center qt;';
+  }
+
+  function parseNetwork(json) {
+    var nodes = new Map(), ways = [], barriers = [];
+    var els = (json && json.elements) || [];
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i];
+      if (e.type === 'node') {
+        nodes.set(e.id, e);
+        if (e.tags && e.tags.barrier) barriers.push(e);
+      } else if (e.type === 'way' && e.tags && e.nodes) {
+        ways.push(e);
+      }
+    }
+    return { nodes: nodes, ways: ways, barriers: barriers };
+  }
+
+  /* Сборка колец из внешних границ relation. */
+  function assembleRings(segs) {
+    var rings = [];
+    var pool = segs.filter(function (s) { return s.length > 1; }).map(function (s) { return s.slice(); });
+    function key(p) { return p[0].toFixed(7) + ',' + p[1].toFixed(7); }
+    while (pool.length) {
+      var ring = pool.pop();
+      var guard = 0;
+      while (key(ring[0]) !== key(ring[ring.length - 1]) && guard++ < 5000) {
+        var end = key(ring[ring.length - 1]);
+        var found = -1, rev = false;
+        for (var i = 0; i < pool.length; i++) {
+          if (key(pool[i][0]) === end) { found = i; break; }
+          if (key(pool[i][pool[i].length - 1]) === end) { found = i; rev = true; break; }
+        }
+        if (found < 0) break;
+        var nxt = pool.splice(found, 1)[0];
+        if (rev) nxt.reverse();
+        ring = ring.concat(nxt.slice(1));
+      }
+      if (ring.length >= 4 && key(ring[0]) === key(ring[ring.length - 1])) rings.push(ring);
+    }
+    return rings;
+  }
+
+  function ringToXY(ring) {
+    var a = new Float64Array(ring.length * 2);
+    var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for (var i = 0; i < ring.length; i++) {
+      var x = px(ring[i][1]), y = py(ring[i][0]);
+      a[2 * i] = x; a[2 * i + 1] = y;
+      if (x < minx) minx = x; if (x > maxx) maxx = x;
+      if (y < miny) miny = y; if (y > maxy) maxy = y;
+    }
+    return { xy: a, minx: minx, miny: miny, maxx: maxx, maxy: maxy };
+  }
+
+  function ringCentroid(ring) {
+    var sx = 0, sy = 0;
+    for (var i = 0; i < ring.length; i++) { sy += ring[i][0]; sx += ring[i][1]; }
+    return [sy / ring.length, sx / ring.length];
+  }
+
+  var POI_CAT = [
+    ['viewpoint', 'view'], ['attraction', 'sight'], ['museum', 'sight'], ['gallery', 'sight'], ['artwork', 'art'],
+    ['fountain', 'water'], ['dam', 'water'], ['tower', 'sight'], ['lighthouse', 'sight'], ['obelisk', 'sight']
+  ];
+  function poiCategory(t) {
+    if (t.tourism === 'viewpoint') return 'view';
+    if (t.tourism === 'artwork') return 'art';
+    if (t.tourism) return 'sight';
+    if (t.historic) return 'history';
+    if (t.amenity === 'fountain' || t.waterway) return 'water';
+    if (t.man_made) return 'sight';
+    return 'sight';
+  }
+
+  function parseContext(json) {
+    var parks = [], pois = [];
+    var els = (json && json.elements) || [];
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i], t = e.tags || {};
+      var isArea = t.leisure === 'park' || t.leisure === 'garden' || t.leisure === 'nature_reserve' ||
+        t.landuse === 'forest' || t.landuse === 'recreation_ground' || t.landuse === 'village_green' || t.natural === 'wood';
+      if ((e.type === 'way' || e.type === 'relation') && isArea && (e.geometry || e.members)) {
+        var rings = [];
+        if (e.type === 'way') {
+          var r = e.geometry.map(function (p) { return [p.lat, p.lon]; });
+          if (r.length >= 4) rings.push(r);
+        } else {
+          var segs = [];
+          e.members.forEach(function (m) {
+            if (m.type === 'way' && m.geometry && (m.role === 'outer' || m.role === '')) {
+              segs.push(m.geometry.map(function (p) { return [p.lat, p.lon]; }));
+            }
+          });
+          rings = assembleRings(segs);
+        }
+        for (var k = 0; k < rings.length; k++) {
+          var pr = ringToXY(rings[k]);
+          pr.name = t.name || '';
+          pr.kind = t.leisure || t.landuse || t.natural;
+          pr.center = ringCentroid(rings[k]);
+          pr.id = e.type + e.id + '_' + k;
+          parks.push(pr);
+        }
+        continue;
+      }
+      var lat = e.lat !== undefined ? e.lat : (e.center && e.center.lat);
+      var lon = e.lon !== undefined ? e.lon : (e.center && e.center.lon);
+      if (lat === undefined || lon === undefined) continue;
+      pois.push({
+        id: e.type[0] + e.id, lat: lat, lon: lon, name: t.name || t['name:ru'] || '',
+        cat: poiCategory(t), tags: t
+      });
+    }
+    /* именованные парки тоже показываем как места */
+    var seen = {};
+    parks.forEach(function (p) {
+      if (p.name && !seen[p.name]) {
+        seen[p.name] = 1;
+        pois.push({ id: 'park_' + p.id, lat: p.center[0], lon: p.center[1], name: p.name, cat: 'park', tags: {} });
+      }
+    });
+    return { parks: parks, pois: pois };
+  }
+
+  /* ---------- граф ---------- */
+  function buildGraph(parsed, opts) {
+    opts = opts || {};
+    var blocked = new Set(), closedGates = [];
+    parsed.barriers.forEach(function (b) {
+      if (isBlockingBarrier(b.tags, opts.strictGates)) {
+        blocked.add(b.id);
+        closedGates.push({ lat: b.lat, lon: b.lon, barrier: b.tags.barrier, access: b.tags.access || '', name: b.tags.name || '' });
+      }
+    });
+
+    var idx = new Map(), latA = [], lonA = [];
+    var eF = [], eT = [], eL = [], eP = [], eC = [], eAp = [], eFix = [], eName = [];
+    var names = [], nameIdx = new Map();
+    var closedWays = [];
+
+    function getIdx(id, nd) {
+      var k = idx.get(id);
+      if (k === undefined) { k = latA.length; idx.set(id, k); latA.push(nd.lat); lonA.push(nd.lon); }
+      return k;
+    }
+
+    for (var wi = 0; wi < parsed.ways.length; wi++) {
+      var w = parsed.ways[wi];
+      var c = classifyWay(w.tags, opts);
+      if (!c) continue;
+      if (!c.ok) {
+        if (c.closed && closedWays.length < 4000) {
+          var line = [];
+          for (var q = 0; q < w.nodes.length; q++) {
+            var nq = parsed.nodes.get(w.nodes[q]);
+            if (nq) line.push([nq.lat, nq.lon]);
+          }
+          if (line.length > 1) closedWays.push(line);
+        }
+        continue;
+      }
+      var nm = w.tags.name || '';
+      var ni = -1;
+      if (nm) {
+        ni = nameIdx.get(nm);
+        if (ni === undefined) { ni = names.length; names.push(nm); nameIdx.set(nm, ni); }
+      }
+      var ns = w.nodes;
+      for (var i = 0; i < ns.length - 1; i++) {
+        var a = ns[i], b = ns[i + 1];
+        var na = parsed.nodes.get(a), nb = parsed.nodes.get(b);
+        if (!na || !nb) continue;
+        if (blocked.has(a) || blocked.has(b)) continue;
+        var len = hav(na.lat, na.lon, nb.lat, nb.lon);
+        if (len < 0.05) continue;
+        var ia = getIdx(a, na), ib = getIdx(b, nb);
+        if (ia === ib) continue;
+        eF.push(ia); eT.push(ib); eL.push(len); eP.push(c.pen); eC.push(c.cls);
+        eAp.push(c.appeal); eFix.push(c.fix); eName.push(ni);
+      }
+    }
+
+    var n = latA.length, E = eF.length;
+    var g = {
+      n: n, E: E,
+      lat: Float64Array.from(latA), lon: Float64Array.from(lonA),
+      X: new Float64Array(n), Y: new Float64Array(n),
+      eF: Int32Array.from(eF), eT: Int32Array.from(eT),
+      eLen: Float64Array.from(eL), ePen: Float32Array.from(eP), eCls: Uint8Array.from(eC),
+      eAp: Float32Array.from(eAp), eFix: Float32Array.from(eFix), eName: Int32Array.from(eName),
+      eExpl: new Uint8Array(E), ePark: new Uint8Array(E),
+      names: names, closedGates: closedGates, closedWays: closedWays,
+      pois: [], poiGrid: null
+    };
+    for (var v = 0; v < n; v++) { g.X[v] = px(g.lon[v]); g.Y[v] = py(g.lat[v]); }
+
+    /* CSR-списки смежности */
+    var deg = new Int32Array(n + 1);
+    for (var e = 0; e < E; e++) { deg[g.eF[e]]++; deg[g.eT[e]]++; }
+    g.adjStart = new Int32Array(n + 1);
+    for (var u = 0; u < n; u++) g.adjStart[u + 1] = g.adjStart[u] + deg[u];
+    g.adjEdge = new Int32Array(2 * E);
+    var fill = g.adjStart.slice(0, n);
+    for (var e2 = 0; e2 < E; e2++) {
+      g.adjEdge[fill[g.eF[e2]]++] = e2;
+      g.adjEdge[fill[g.eT[e2]]++] = e2;
+    }
+    g.deg = new Int32Array(n);
+    for (var u2 = 0; u2 < n; u2++) g.deg[u2] = g.adjStart[u2 + 1] - g.adjStart[u2];
+
+    /* компоненты связности */
+    g.comp = new Int32Array(n).fill(-1);
+    g.compSize = [];
+    var stack = new Int32Array(n);
+    for (var s = 0; s < n; s++) {
+      if (g.comp[s] !== -1) continue;
+      var cid = g.compSize.length, sp = 0, cnt = 0;
+      stack[sp++] = s; g.comp[s] = cid;
+      while (sp) {
+        var x = stack[--sp]; cnt++;
+        for (var k = g.adjStart[x]; k < g.adjStart[x + 1]; k++) {
+          var ed = g.adjEdge[k];
+          var y = g.eF[ed] === x ? g.eT[ed] : g.eF[ed];
+          if (g.comp[y] === -1) { g.comp[y] = cid; stack[sp++] = y; }
+        }
+      }
+      g.compSize.push(cnt);
+    }
+    return g;
+  }
+
+  function other(g, e, v) { return g.eF[e] === v ? g.eT[e] : g.eF[e]; }
+
+  /* сетка узлов для поиска ближайшего */
+  function ensureGrid(g) {
+    if (g.grid) return g.grid;
+    var cell = 120, m = new Map();
+    for (var v = 0; v < g.n; v++) {
+      var key = Math.floor(g.X[v] / cell) * 100003 + Math.floor(g.Y[v] / cell);
+      var arr = m.get(key);
+      if (arr) arr.push(v); else m.set(key, [v]);
+    }
+    g.grid = { cell: cell, map: m };
+    return g.grid;
+  }
+
+  function nearestNode(g, lat, lon, maxM, minComp) {
+    var gr = ensureGrid(g);
+    var x = px(lon), y = py(lat);
+    var cx = Math.floor(x / gr.cell), cy = Math.floor(y / gr.cell);
+    var rings = Math.ceil(maxM / gr.cell) + 1;
+    var best = -1, bd = Infinity;
+    for (var r = 0; r <= rings; r++) {
+      for (var i = -r; i <= r; i++) {
+        for (var j = -r; j <= r; j++) {
+          if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
+          var arr = gr.map.get((cx + i) * 100003 + (cy + j));
+          if (!arr) continue;
+          for (var q = 0; q < arr.length; q++) {
+            var v = arr[q];
+            if (minComp && g.compSize[g.comp[v]] < minComp) continue;
+            var dx = g.X[v] - x, dy = g.Y[v] - y, d = Math.sqrt(dx * dx + dy * dy);
+            if (d < bd) { bd = d; best = v; }
+          }
+        }
+      }
+      if (best >= 0 && bd <= r * gr.cell) break;
+    }
+    if (best < 0 || bd > maxM) return null;
+    return { node: best, dist: bd };
+  }
+
+  /* Парки и интересные места: влияют на «привлекательность» рёбер. */
+  function applyContext(g, ctx) {
+    g.parks = (ctx && ctx.parks) || [];
+    g.pois = (ctx && ctx.pois) || [];
+    g.ePark.fill(0);
+    var E = g.E, i;
+    for (var e = 0; e < E; e++) {
+      var mx = (g.X[g.eF[e]] + g.X[g.eT[e]]) / 2, my = (g.Y[g.eF[e]] + g.Y[g.eT[e]]) / 2;
+      for (i = 0; i < g.parks.length; i++) {
+        var p = g.parks[i];
+        if (mx < p.minx || mx > p.maxx || my < p.miny || my > p.maxy) continue;
+        if (pointInRing(mx, my, p.xy)) { g.ePark[e] = 1; break; }
+      }
+    }
+    buildPoiGrid(g);
+    var cell = g.poiGrid.cell;
+    for (var e3 = 0; e3 < E; e3++) {
+      if (g.ePark[e3]) { if (g.eAp[e3] < 1) g.eAp[e3] = 1; continue; }
+      var x = (g.X[g.eF[e3]] + g.X[g.eT[e3]]) / 2, y = (g.Y[g.eF[e3]] + g.Y[g.eT[e3]]) / 2;
+      if (poiNear(g, x, y, 60) >= 0 && g.eAp[e3] < 0.8 && g.eCls[e3] !== CLS.main) g.eAp[e3] = 0.8;
+    }
+  }
+
+  function buildPoiGrid(g) {
+    var cell = 100, m = new Map();
+    g.pois.forEach(function (p, i) {
+      p.x = px(p.lon); p.y = py(p.lat);
+      var key = Math.floor(p.x / cell) * 100003 + Math.floor(p.y / cell);
+      var arr = m.get(key);
+      if (arr) arr.push(i); else m.set(key, [i]);
+    });
+    g.poiGrid = { cell: cell, map: m };
+  }
+
+  /* индекс ближайшего места в радиусе r метров, иначе -1 */
+  function poiNear(g, x, y, r) {
+    if (!g.poiGrid) return -1;
+    var cell = g.poiGrid.cell;
+    var cx = Math.floor(x / cell), cy = Math.floor(y / cell);
+    var best = -1, bd = r;
+    for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) {
+      var arr = g.poiGrid.map.get((cx + i) * 100003 + (cy + j));
+      if (!arr) continue;
+      for (var q = 0; q < arr.length; q++) {
+        var p = g.pois[arr[q]];
+        var d = Math.sqrt((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y));
+        if (d <= bd) { bd = d; best = arr[q]; }
+      }
+    }
+    return best;
+  }
+
+  /* Изученные улицы: ребро считается пройденным, если рядом лежит след. */
+  function applyExplored(g, lines) {
+    g.eExpl.fill(0);
+    if (!lines || !lines.length) return 0;
+    var cell = 25, tol = 22, map = new Map();
+    var total = 0;
+    lines.forEach(function (line) {
+      var pts = resample(line, 12);
+      for (var i = 0; i < pts.length; i++) {
+        var x = px(pts[i][1]), y = py(pts[i][0]);
+        var key = Math.floor(x / cell) * 100003 + Math.floor(y / cell);
+        var arr = map.get(key);
+        if (arr) arr.push(x, y); else map.set(key, [x, y]);
+        total++;
+      }
+    });
+    function near(x, y) {
+      var cx = Math.floor(x / cell), cy = Math.floor(y / cell);
+      for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) {
+        var arr = map.get((cx + i) * 100003 + (cy + j));
+        if (!arr) continue;
+        for (var q = 0; q < arr.length; q += 2) {
+          var dx = arr[q] - x, dy = arr[q + 1] - y;
+          if (dx * dx + dy * dy <= tol * tol) return true;
+        }
+      }
+      return false;
+    }
+    var marked = 0;
+    for (var e = 0; e < g.E; e++) {
+      var ax = g.X[g.eF[e]], ay = g.Y[g.eF[e]], bx = g.X[g.eT[e]], by = g.Y[g.eT[e]];
+      var hit = 0;
+      var ts = [0.25, 0.5, 0.75];
+      for (var k = 0; k < 3; k++) {
+        if (near(ax + (bx - ax) * ts[k], ay + (by - ay) * ts[k])) hit++;
+      }
+      if (hit >= 2) { g.eExpl[e] = 1; marked++; }
+    }
+    return marked;
+  }
+
+  var CLASS_PEN = function (cls, mainAvoid) {
+    switch (cls) {
+      case CLS.path: return 0;
+      case CLS.street: return 0.05;
+      case CLS.road: return 0.15 + 0.6 * mainAvoid;
+      case CLS.main: return 0.4 + 2.6 * mainAvoid;
+      default: return 0.5;
+    }
+  };
+
+  /* Стоимость ребра ≥ его длины (иначе A* с эвклидовой эвристикой был бы неверным). */
+  function buildCost(g, prefs) {
+    prefs = prefs || {};
+    var aw = prefs.appeal === undefined ? 0.35 : prefs.appeal;
+    var nov = prefs.novelty || 0;
+    var ma = prefs.mainAvoid === undefined ? 0.6 : prefs.mainAvoid;
+    var cost = new Float64Array(g.E);
+    for (var e = 0; e < g.E; e++) {
+      var m = 1 + g.ePen[e] + CLASS_PEN(g.eCls[e], ma) + (1 - g.eAp[e]) * aw;
+      if (nov > 0 && g.eExpl[e]) m += 0.9 * nov;
+      else if (nov < 0 && !g.eExpl[e]) m += 0.9 * (-nov);
+      cost[e] = g.eLen[e] * m + g.eFix[e];
+    }
+    return cost;
+  }
+
+  /* ---------- A* ---------- */
+  function makeRouter(g) {
+    var n = g.n;
+    var gs = new Float64Array(n), stamp = new Uint32Array(n), done = new Uint32Array(n);
+    var prevE = new Int32Array(n);
+    var cap = g.adjEdge.length + 16;
+    var hN = new Int32Array(cap), hK = new Float64Array(cap), hs = 0;
+    var cur = 0;
+
+    function push(node, key) {
+      var i = hs++;
+      while (i > 0) {
+        var p = (i - 1) >> 1;
+        if (hK[p] <= key) break;
+        hN[i] = hN[p]; hK[i] = hK[p]; i = p;
+      }
+      hN[i] = node; hK[i] = key;
+    }
+    function pop() {
+      var top = hN[0];
+      hs--;
+      if (hs > 0) {
+        var node = hN[hs], key = hK[hs], i = 0;
+        for (;;) {
+          var l = 2 * i + 1;
+          if (l >= hs) break;
+          var r = l + 1;
+          var c = (r < hs && hK[r] < hK[l]) ? r : l;
+          if (hK[c] >= key) break;
+          hN[i] = hN[c]; hK[i] = hK[c]; i = c;
+        }
+        hN[i] = node; hK[i] = key;
+      }
+      return top;
+    }
+
+    function route(cost, src, dst, used, usedMul) {
+      if (src === dst) return { nodes: [src], edges: [], cost: 0 };
+      cur++;
+      hs = 0;
+      var X = g.X, Y = g.Y, dx0 = X[dst], dy0 = Y[dst];
+      gs[src] = 0; stamp[src] = cur; prevE[src] = -1;
+      var h0 = Math.sqrt((X[src] - dx0) * (X[src] - dx0) + (Y[src] - dy0) * (Y[src] - dy0)) * 0.995;
+      push(src, h0);
+      var found = false;
+      while (hs > 0) {
+        var v = pop();
+        if (done[v] === cur) continue;
+        done[v] = cur;
+        if (v === dst) { found = true; break; }
+        var gv = gs[v];
+        for (var k = g.adjStart[v]; k < g.adjStart[v + 1]; k++) {
+          var e = g.adjEdge[k];
+          var w = g.eF[e] === v ? g.eT[e] : g.eF[e];
+          if (done[w] === cur) continue;
+          var c = cost[e];
+          if (used && used[e]) c *= usedMul;
+          var ng = gv + c;
+          if (stamp[w] !== cur || ng < gs[w]) {
+            stamp[w] = cur; gs[w] = ng; prevE[w] = e;
+            var ddx = X[w] - dx0, ddy = Y[w] - dy0;
+            push(w, ng + Math.sqrt(ddx * ddx + ddy * ddy) * 0.995);
+          }
+        }
+      }
+      if (!found) return null;
+      var edges = [], nodes = [dst], v2 = dst;
+      while (v2 !== src) {
+        var pe = prevE[v2];
+        edges.push(pe);
+        v2 = g.eF[pe] === v2 ? g.eT[pe] : g.eF[pe];
+        nodes.push(v2);
+      }
+      edges.reverse(); nodes.reverse();
+      return { nodes: nodes, edges: edges, cost: gs[dst] };
+    }
+    return { route: route };
+  }
+
+  /* ---------- оценка маршрута ---------- */
+  function analyzeRoute(g, nodes, edges, prefs) {
+    var total = 0, app = 0, main = 0, path = 0, park = 0, expl = 0, steps = 0, cross = 0;
+    var byName = new Map();
+    for (var i = 0; i < edges.length; i++) {
+      var e = edges[i], L = g.eLen[e];
+      total += L;
+      app += L * g.eAp[e];
+      if (g.eCls[e] === CLS.main || g.eCls[e] === CLS.road) main += L;
+      if (g.eCls[e] === CLS.path && g.eAp[e] >= 0.5) path += L;
+      if (g.ePark[e]) park += L;
+      if (g.eExpl[e]) expl += L;
+      if (g.eCls[e] === CLS.steps) steps += L;
+      if (g.eFix[e] > 0) cross++;
+      var ni = g.eName[e];
+      if (ni >= 0) byName.set(ni, (byName.get(ni) || 0) + L);
+    }
+    /* повороты на перекрёстках */
+    var turns = 0;
+    for (var j = 1; j < nodes.length - 1; j++) {
+      var v = nodes[j];
+      if (g.deg[v] < 3) continue;
+      var a = j - 1, accD = 0;
+      while (a > 0 && accD < 12) { accD += hav(g.lat[nodes[a]], g.lon[nodes[a]], g.lat[nodes[a - 1]], g.lon[nodes[a - 1]]); a--; }
+      var b = j + 1, accE = 0;
+      while (b < nodes.length - 1 && accE < 12) { accE += hav(g.lat[nodes[b]], g.lon[nodes[b]], g.lat[nodes[b + 1]], g.lon[nodes[b + 1]]); b++; }
+      var b1 = bearing(g.lat[nodes[a]], g.lon[nodes[a]], g.lat[v], g.lon[v]);
+      var b2 = bearing(g.lat[v], g.lon[v], g.lat[nodes[b]], g.lon[nodes[b]]);
+      var d = Math.abs(b2 - b1); if (d > 180) d = 360 - d;
+      if (d > 35) turns++;
+    }
+    /* интересные места рядом */
+    var poiSeen = new Map();
+    if (g.pois && g.pois.length) {
+      for (var q = 0; q < nodes.length; q++) {
+        var pi = poiNear(g, g.X[nodes[q]], g.Y[nodes[q]], 70);
+        if (pi >= 0 && !poiSeen.has(pi)) poiSeen.set(pi, g.pois[pi]);
+      }
+    }
+    var poiList = [];
+    poiSeen.forEach(function (p) { poiList.push(p); });
+    var topNames = Array.from(byName.entries()).sort(function (a2, b2) { return b2[1] - a2[1]; })
+      .slice(0, 4).map(function (en) { return g.names[en[0]]; });
+
+    var km = total / 1000 || 1;
+    return {
+      length: total,
+      appeal: total ? app / total : 0,
+      mainShare: total ? main / total : 0,
+      pathShare: total ? path / total : 0,
+      parkShare: total ? park / total : 0,
+      exploredShare: total ? expl / total : 0,
+      newShare: total ? 1 - expl / total : 0,
+      stepsLen: steps,
+      crossings: cross,
+      turns: turns,
+      turnsPerKm: turns / km,
+      pois: poiList,
+      streets: topNames
+    };
+  }
+
+  function scoreRoute(m, prefs, err, overlap) {
+    prefs = prefs || {};
+    var nov = prefs.novelty || 0, poiW = prefs.poi === undefined ? 0.5 : prefs.poi;
+    var wApp = 0.3, wMain = 0.15, wNov = 0.1 + 0.15 * Math.abs(nov), wTurn = 0.15, wPoi = 0.05 + 0.2 * poiW;
+    var sum = wApp + wMain + wNov + wTurn + wPoi;
+    var novTerm = nov > 0 ? m.newShare : (nov < 0 ? m.exploredShare : 0.5);
+    var s = wApp * m.appeal + wMain * (1 - m.mainShare) + wNov * novTerm +
+      wTurn * (1 - Math.min(1, m.turnsPerKm / 4)) + wPoi * Math.min(1, m.pois.length / 3);
+    var score = 100 * s / sum - overlap * 60 - err * 100;
+    return Math.max(0, Math.min(100, score));
+  }
+
+  /* ---------- подбор маршрутов ---------- */
+  function createGenerator(g, o) {
+    var rng = mulberry32(o.seed || 1);
+    var router = makeRouter(g);
+    var prefs = o.prefs || {};
+    var cost = buildCost(g, prefs);
+    var A = o.A, B = o.B, L = o.length, tol = o.tol === undefined ? 0.08 : o.tol;
+    var forced = (o.forced || []).filter(function (v) { return v !== A && v !== B; });
+    var comp = g.comp[A];
+    var X = g.X, Y = g.Y;
+    function dist(u, v) { var dx = X[u] - X[v], dy = Y[u] - Y[v]; return Math.sqrt(dx * dx + dy * dy); }
+    var dAB = dist(A, B);
+    var loopish = dAB < 0.1 * L;
+    var ax = X[A], ay = Y[A], bx = X[B], by = Y[B];
+
+    var pool = [];
+    for (var v = 0; v < g.n; v++) {
+      if (g.comp[v] !== comp || g.deg[v] === 0) continue;
+      if ((dist(v, A) + dist(v, B)) * 1.12 <= L * 1.05) pool.push(v);
+    }
+    var attract = [];
+    if (o.attract) o.attract.forEach(function (v) { if (g.comp[v] === comp && (dist(v, A) + dist(v, B)) * 1.12 <= L * 1.05) attract.push(v); });
+    for (var e = 0; e < g.E && attract.length < 600; e += 7) {
+      if (g.ePark[e] && g.comp[g.eF[e]] === comp) {
+        var u = g.eF[e];
+        if ((dist(u, A) + dist(u, B)) * 1.12 <= L * 1.05) attract.push(u);
+      }
+    }
+
+    var maxAttempts = o.maxAttempts || 160;
+    var attempts = 0, rejects = 0, c = 1.3, win = 0.2;
+    var accepted = [], fallback = [];
+    var used = new Uint8Array(g.E), seen = new Uint8Array(g.E);
+    var state = { done: pool.length < 5 && !forced.length, error: pool.length < 5 ? 'pool' : null };
+
+    function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
+    function pickVia() {
+      if (attract.length && rng() < 0.4) return pick(attract);
+      return pick(pool);
+    }
+
+    function order(vias) {
+      var key = {};
+      if (loopish) {
+        var dir = rng() < 0.5 ? 1 : -1;
+        vias.forEach(function (v) {
+          var ang = Math.atan2(Y[v] - ay, X[v] - ax);
+          key[v] = dir * ang;
+        });
+      } else {
+        var l2 = dAB * dAB;
+        vias.forEach(function (v) { key[v] = ((X[v] - ax) * (bx - ax) + (Y[v] - ay) * (by - ay)) / l2; });
+      }
+      return vias.slice().sort(function (p, q) { return key[p] - key[q]; });
+    }
+
+    function sideOf(v) { return (bx - ax) * (Y[v] - ay) - (by - ay) * (X[v] - ax) > 0 ? 1 : -1; }
+
+    function makeVias() {
+      var k = forced.length ? [0, 1, 1, 2][Math.floor(rng() * 4)] : [1, 1, 2, 2, 3][Math.floor(rng() * 5)];
+      var vias = forced.slice();
+      var side = rng() < 0.5 ? 1 : -1;
+      for (var i = 0; i < k; i++) {
+        var cand = pickVia(), tries = 0;
+        while (!loopish && sideOf(cand) !== side && tries++ < 8) cand = pickVia();
+        if (cand !== A && cand !== B) vias.push(cand);
+      }
+      return order(vias);
+    }
+
+    function estimate(seq) {
+      var s = 0;
+      for (var i = 1; i < seq.length; i++) s += dist(seq[i - 1], seq[i]);
+      return s;
+    }
+
+    function buildRoute(seq) {
+      used.fill(0);
+      var nodes = [seq[0]], edges = [];
+      for (var i = 1; i < seq.length; i++) {
+        var r = router.route(cost, seq[i - 1], seq[i], used, 6);
+        if (!r) return null;
+        for (var j = 0; j < r.edges.length; j++) { used[r.edges[j]] = 1; edges.push(r.edges[j]); }
+        for (var q = 1; q < r.nodes.length; q++) nodes.push(r.nodes[q]);
+      }
+      return { nodes: nodes, edges: edges };
+    }
+
+    function consider(seq) {
+      var r = buildRoute(seq);
+      if (!r || !r.edges.length) return;
+      var total = 0, overlap = 0;
+      seen.fill(0);
+      for (var i = 0; i < r.edges.length; i++) {
+        var ed = r.edges[i];
+        total += g.eLen[ed];
+        if (seen[ed]) overlap += g.eLen[ed]; else seen[ed] = 1;
+      }
+      var eu = estimate(seq);
+      if (eu > 50) c = 0.7 * c + 0.3 * Math.max(1.05, Math.min(2, total / eu));
+      var err = Math.abs(total - L) / L;
+      var ov = total ? overlap / total : 0;
+      var cand = { nodes: r.nodes, edges: r.edges, length: total, err: err, overlap: ov, via: seq.slice(1, -1) };
+      var mask = new Uint8Array(g.E);
+      for (var k = 0; k < r.edges.length; k++) mask[r.edges[k]] = 1;
+      cand.mask = mask;
+      if (err <= tol && ov <= 0.2) accepted.push(cand);
+      else if (err <= 0.35 && ov <= 0.3) fallback.push(cand);
+    }
+
+    function similarity(a, b) {
+      var shared = 0;
+      for (var i = 0; i < b.edges.length; i++) if (a.mask[b.edges[i]]) shared += g.eLen[b.edges[i]];
+      var uni = a.length + b.length - shared;
+      return uni > 0 ? shared / uni : 1;
+    }
+
+    /* A≠B: прямой кратчайший путь тоже кандидат */
+    var directTried = false;
+
+    function step() {
+      attempts++;
+      if (!directTried) {
+        directTried = true;
+        if (!forced.length && A !== B) { consider([A, B]); return; }
+      }
+      var seq = null, tries = 0;
+      while (tries++ < 40) {
+        var vias = makeVias();
+        var s = [A].concat(vias, [B]);
+        var est = estimate(s) * c;
+        if (est >= L * (1 - win) && est <= L * (1 + win)) { seq = s; break; }
+        rejects++;
+        if (rejects % 60 === 0 && win < 0.5) win += 0.05;
+      }
+      if (!seq) return;
+      consider(seq);
+    }
+
+    function run(ms) {
+      var t0 = Date.now();
+      while (!state.done && Date.now() - t0 < ms) {
+        step();
+        if (attempts >= maxAttempts) state.done = true;
+        else if (accepted.length >= (o.count || 3) * 5 && attempts >= 40) state.done = true;
+      }
+      return state.done;
+    }
+
+    function results() {
+      var count = o.count || 3;
+      var pool1 = accepted.slice();
+      var approx = false;
+      if (pool1.length < count) {
+        fallback.sort(function (a, b) { return a.err - b.err; });
+        for (var i = 0; i < fallback.length && pool1.length < count * 3; i++) pool1.push(fallback[i]);
+        approx = true;
+      }
+      pool1.forEach(function (r) {
+        r.metrics = analyzeRoute(g, r.nodes, r.edges, prefs);
+        r.score = scoreRoute(r.metrics, prefs, r.err, r.overlap);
+      });
+      pool1.sort(function (a, b) {
+        var ea = a.err <= tol ? 0 : 1, eb = b.err <= tol ? 0 : 1;
+        if (ea !== eb) return ea - eb;
+        return b.score - a.score;
+      });
+      var picked = [];
+      [0.5, 0.7, 0.9].forEach(function (lim) {
+        for (var i = 0; i < pool1.length && picked.length < count; i++) {
+          var cand = pool1[i];
+          if (picked.indexOf(cand) >= 0) continue;
+          var ok = true;
+          for (var j = 0; j < picked.length; j++) if (similarity(picked[j], cand) > lim) { ok = false; break; }
+          if (ok) picked.push(cand);
+        }
+      });
+      picked.forEach(function (r) {
+        r.coords = r.nodes.map(function (n) { return [g.lat[n], g.lon[n]]; });
+        r.off = r.err > tol;
+        delete r.mask;
+      });
+      return { routes: picked, approx: approx && !accepted.length, attempts: attempts, accepted: accepted.length };
+    }
+
+    return {
+      run: run, results: results, state: state,
+      progress: function () { return { attempts: attempts, max: maxAttempts, accepted: accepted.length }; },
+      poolSize: pool.length
+    };
+  }
+
+  /* Кратчайший путь по длине (для ручной разметки изученных улиц). */
+  function shortestPath(g, router, a, b) {
+    var cost = new Float64Array(g.E);
+    for (var e = 0; e < g.E; e++) cost[e] = g.eLen[e] + g.eFix[e];
+    var r = router.route(cost, a, b, null, 1);
+    if (!r) return null;
+    return r.nodes.map(function (n) { return [g.lat[n], g.lon[n]]; });
+  }
+
+  /* ---------- километровые метки ---------- */
+  function kmMarkers(coords, stepM) {
+    var out = [];
+    if (coords.length < 2 || !(stepM > 0)) return out;
+    var acc = 0, next = stepM;
+    for (var i = 1; i < coords.length; i++) {
+      var a = coords[i - 1], b = coords[i];
+      var seg = hav(a[0], a[1], b[0], b[1]);
+      while (seg > 0 && acc + seg >= next - 1e-9) {
+        var t = (next - acc) / seg;
+        out.push({
+          km: next / 1000,
+          lat: a[0] + (b[0] - a[0]) * t,
+          lon: a[1] + (b[1] - a[1]) * t,
+          index: i
+        });
+        next += stepM;
+      }
+      acc += seg;
+    }
+    return out;
+  }
+
+  function fmtKm(km) {
+    var s = (Math.round(km * 100) / 100).toString().replace('.', ',');
+    return s;
+  }
+
+  /* ---------- GPX ---------- */
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function toGPX(o) {
+    var lines = [];
+    lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+    lines.push('<gpx version="1.1" creator="Беговой атлас Москвы" xmlns="http://www.topografix.com/GPX/1/1">');
+    lines.push('  <metadata><name>' + esc(o.name || 'Маршрут') + '</name><time>' + new Date().toISOString() + '</time></metadata>');
+    (o.waypoints || []).forEach(function (w) {
+      lines.push('  <wpt lat="' + w.lat.toFixed(6) + '" lon="' + w.lon.toFixed(6) + '"><name>' + esc(w.name) + '</name>' +
+        (w.desc ? '<desc>' + esc(w.desc) + '</desc>' : '') + '</wpt>');
+    });
+    lines.push('  <trk>');
+    lines.push('    <name>' + esc(o.name || 'Маршрут') + '</name>');
+    if (o.desc) lines.push('    <desc>' + esc(o.desc) + '</desc>');
+    lines.push('    <trkseg>');
+    o.coords.forEach(function (p) {
+      lines.push('      <trkpt lat="' + p[0].toFixed(6) + '" lon="' + p[1].toFixed(6) + '"></trkpt>');
+    });
+    lines.push('    </trkseg>');
+    lines.push('  </trk>');
+    lines.push('</gpx>');
+    return lines.join('\n');
+  }
+
+  function attr(tag, name) {
+    var m = new RegExp('\\b' + name + '\\s*=\\s*("([^"]*)"|\'([^\']*)\')').exec(tag);
+    return m ? (m[2] !== undefined ? m[2] : m[3]) : null;
+  }
+  function unesc(s) {
+    return s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+  }
+
+  function parseGPX(text) {
+    var tracks = [], waypoints = [], name = '';
+    var mn = /<metadata[^>]*>[\s\S]*?<name>([\s\S]*?)<\/name>/.exec(text) || /<trk[^>]*>[\s\S]*?<name>([\s\S]*?)<\/name>/.exec(text);
+    if (mn) name = unesc(mn[1]).trim();
+    var ptRe = /<(trkpt|rtept)\b([^>]*?)\/?>/g;
+    var segRe = /<(trkseg|rte)\b[^>]*>([\s\S]*?)<\/\1>/g;
+    var sm;
+    while ((sm = segRe.exec(text))) {
+      var pts = [], pm;
+      ptRe.lastIndex = 0;
+      while ((pm = ptRe.exec(sm[2]))) {
+        var la = parseFloat(attr(pm[2], 'lat')), lo = parseFloat(attr(pm[2], 'lon'));
+        if (isFinite(la) && isFinite(lo)) pts.push([la, lo]);
+      }
+      if (pts.length > 1) tracks.push(pts);
+    }
+    var wRe = /<wpt\b([^>]*)>([\s\S]*?)<\/wpt>/g, wm;
+    while ((wm = wRe.exec(text))) {
+      var wl = parseFloat(attr(wm[1], 'lat')), wo = parseFloat(attr(wm[1], 'lon'));
+      var nn = /<name>([\s\S]*?)<\/name>/.exec(wm[2]);
+      if (isFinite(wl) && isFinite(wo)) waypoints.push({ lat: wl, lon: wo, name: nn ? unesc(nn[1]).trim() : '' });
+    }
+    return { name: name, tracks: tracks, waypoints: waypoints };
+  }
+
+  /* зона, уже загруженная ранее, покрывает новую? (стадион вокруг отрезка) */
+  function regionContains(old, nw) {
+    if (!old) return false;
+    function d(p) {
+      return distToSegment(px(p[1]), py(p[0]), px(old.A[1]), py(old.A[0]), px(old.B[1]), py(old.B[0]));
+    }
+    return d(nw.A) + nw.R <= old.R && d(nw.B) + nw.R <= old.R;
+  }
+
+  return {
+    hav: hav, bearing: bearing, polyLength: polyLength, simplifyDP: simplifyDP, resample: resample,
+    pointInRing: pointInRing, mulberry32: mulberry32,
+    classifyWay: classifyWay, isBlockingBarrier: isBlockingBarrier,
+    aroundStr: aroundStr, loadRadius: loadRadius, networkQuery: networkQuery, contextQuery: contextQuery,
+    parseNetwork: parseNetwork, parseContext: parseContext, assembleRings: assembleRings,
+    buildGraph: buildGraph, nearestNode: nearestNode, applyContext: applyContext, applyExplored: applyExplored,
+    buildCost: buildCost, makeRouter: makeRouter, analyzeRoute: analyzeRoute, createGenerator: createGenerator,
+    shortestPath: shortestPath, kmMarkers: kmMarkers, fmtKm: fmtKm, toGPX: toGPX, parseGPX: parseGPX,
+    regionContains: regionContains, CLS: CLS, poiNear: poiNear
+  };
+});
+
+</script>
+<script>
+/* Беговой атлас Москвы: интерфейс. Вся логика маршрутов лежит в core.js (Core). */
+(function () {
+  'use strict';
+
+  var $ = function (s) { return document.querySelector(s); };
+  function el(tag, attrs) {
+    var n = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === 'class') n.className = v;
+      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v === true ? '' : v);
+    });
+    for (var i = 2; i < arguments.length; i++) {
+      var c = arguments[i];
+      if (c === null || c === undefined || c === false) continue;
+      n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    }
+    return n;
+  }
+  function tick() { return new Promise(function (r) { setTimeout(r, 0); }); }
+  function fmt1(x) { return (Math.round(x * 10) / 10).toFixed(1).replace('.', ','); }
+  function fmtKm(m) { return fmt1(m / 1000); }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function round5(p) { return [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]; }
+
+  if (typeof L === 'undefined') {
+    $('#map').textContent = 'Не удалось загрузить библиотеку карты (Leaflet). Проверьте подключение к интернету и обновите страницу.';
+    return;
+  }
+
+  /* ---------- хранилище ---------- */
+  var STORE_KEY = 'atlas.v1';
+  var DEFAULTS = {
+    explored: [], places: [], A: null, B: null,
+    prefs: { km: 10, tol: 0.08, loop: true, main: 60, appeal: 40, novelty: 0, poi: 50, avoidSteps: true, strictGates: false, kmStep: 1, pace: '6:00' },
+    layers: { explored: true, places: true, gates: true, osm: false },
+    view: { lat: 55.7558, lon: 37.6173, z: 12 }, theme: 'auto'
+  };
+  function loadStore() {
+    var s = null;
+    try { s = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { s = null; }
+    var d = JSON.parse(JSON.stringify(DEFAULTS));
+    if (!s || typeof s !== 'object') return d;
+    Object.keys(s).forEach(function (k) {
+      if (k === 'prefs' || k === 'layers' || k === 'view') Object.assign(d[k], s[k]);
+      else d[k] = s[k];
+    });
+    return d;
+  }
+  var store = loadStore();
+  var saveWarned = false, saveTimer = null;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); }
+      catch (e) {
+        if (!saveWarned) { saveWarned = true; toast('Браузер не даёт сохранить данные. Скачайте копию во вкладке «Ещё».'); }
+      }
+    }, 150);
+  }
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('#toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 5200);
+  }
+
+  /* ---------- состояние ---------- */
+  var ROUTE_COLORS = ['#E8362D', '#1E8F4E', '#1668C4', '#E88A1A'];
+  var CATS = {
+    view: ['Видовая точка', '#1668C4'], park: ['Парк', '#1E8F4E'], water: ['Вода, набережная', '#19A8D6'],
+    trail: ['Тропа', '#8D5B2D'], sight: ['Достопримечательность', '#E88A1A'], art: ['Арт-объект', '#8E479C'],
+    history: ['Памятник', '#B8860B'], other: ['Другое', '#586861']
+  };
+  var OVERPASS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+  ];
+  var S = {
+    mode: null, routes: [], sel: -1, net: null, graph: null, graphKey: '', router: null,
+    osmPois: [], forced: [], busy: false, abort: null, pendingPlace: null,
+    draft: { coords: [], hist: [], lastNode: null }
+  };
+
+  /* ---------- карта ---------- */
+  var map = L.map('map', { zoomControl: true, preferCanvas: true, zoomSnap: 0.5 })
+    .setView([store.view.lat, store.view.lon], store.view.z);
+  var TILES = {
+    osm: { name: 'OpenStreetMap (нужен адрес http://, не файл)', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', o: { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' } },
+    esri: { name: 'Esri Streets (работает и с файла)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', o: { maxZoom: 19, attribution: 'Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors' } },
+    topo: { name: 'OpenTopoMap (рельеф, тропы)', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', o: { maxZoom: 17, subdomains: 'abc', attribution: '© OpenStreetMap, SRTM | © OpenTopoMap (CC-BY-SA)' } }
+  };
+  var tileLayer = null, tileErrors = 0;
+  function setTiles(key, auto) {
+    if (!TILES[key]) key = 'esri';
+    if (tileLayer) map.removeLayer(tileLayer);
+    tileErrors = 0;
+    tileLayer = L.tileLayer(TILES[key].url, TILES[key].o);
+    tileLayer.on('tileerror', function () {
+      tileErrors++;
+      if (tileErrors === 8 && key !== 'esri') {
+        store.tiles = 'esri'; $('#tileSel').value = 'esri'; setTiles('esri', true); save();
+        toast('Эта карта не отдаёт плитки. Переключился на Esri Streets.');
+      }
+    });
+    tileLayer.addTo(map); tileLayer.bringToBack();
+  }
+  var startTiles = store.tiles || (location.protocol.indexOf('http') === 0 ? 'osm' : 'esri');
+  setTiles(startTiles);
+  L.control.scale({ imperial: false }).addTo(map);
+
+  var exploredLayer = L.layerGroup(), closedLayer = L.layerGroup(), gatesLayer = L.layerGroup(),
+    osmLayer = L.layerGroup(), placesLayer = L.layerGroup(), routesLayer = L.layerGroup(),
+    kmLayer = L.layerGroup(), abLayer = L.layerGroup(), draftLayer = L.layerGroup();
+  [exploredLayer, closedLayer, osmLayer, placesLayer, gatesLayer, routesLayer, draftLayer, kmLayer, abLayer].forEach(function (l) { l.addTo(map); });
+
+  map.on('moveend', function () {
+    var c = map.getCenter();
+    store.view = { lat: c.lat, lon: c.lng, z: map.getZoom() };
+    save();
+  });
+  window.addEventListener('resize', function () { map.invalidateSize(); });
+
+  function divIcon(html, cls, w, h, ax, ay) {
+    return L.divIcon({ html: html, className: '', iconSize: [w, h], iconAnchor: [ax === undefined ? w / 2 : ax, ay === undefined ? h / 2 : ay] });
+  }
+
+  /* ---------- вкладки и тема ---------- */
+  var tabs = ['route', 'explored', 'places', 'more'];
+  tabs.forEach(function (t) {
+    $('#tab-' + t).addEventListener('click', function () {
+      tabs.forEach(function (u) {
+        $('#tab-' + u).setAttribute('aria-selected', u === t ? 'true' : 'false');
+        $('#pane-' + u).hidden = u !== t;
+      });
+    });
+  });
+  function applyTheme() {
+    var t = store.theme;
+    if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', t);
+    $('#themeBtn').textContent = 'Тема: ' + (t === 'auto' ? 'авто' : t === 'dark' ? 'тёмная' : 'светлая');
+  }
+  $('#themeBtn').addEventListener('click', function () {
+    store.theme = store.theme === 'auto' ? 'dark' : store.theme === 'dark' ? 'light' : 'auto';
+    applyTheme(); save();
+  });
+  applyTheme();
+
+  /* ---------- режимы клика по карте ---------- */
+  function setMode(m, text) {
+    S.mode = m;
+    $('#map').classList.toggle('picking', !!m);
+    $('#pickA').setAttribute('aria-pressed', String(m === 'A'));
+    $('#pickB').setAttribute('aria-pressed', String(m === 'B'));
+    var b = $('#banner');
+    b.hidden = !m;
+    $('#bannerText').textContent = text || '';
+    $('#bannerOk').hidden = m !== 'draw';
+    $('#bannerUndo').hidden = m !== 'draw';
+    if (m !== 'draw') clearDraft();
+  }
+  $('#bannerCancel').addEventListener('click', function () { setMode(null); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.mode) setMode(null); });
+
+  map.on('click', function (e) {
+    if (S.mode === 'A') { setPoint('A', e.latlng.lat, e.latlng.lng); setMode(null); if (!store.prefs.loop && !store.B) setMode('B', 'Нажмите на карте, где финиш (точка B)'); }
+    else if (S.mode === 'B') { setPoint('B', e.latlng.lat, e.latlng.lng); setMode(null); }
+    else if (S.mode === 'place') { startPlaceForm(e.latlng.lat, e.latlng.lng); setMode(null); }
+    else if (S.mode === 'draw') drawClick(e.latlng);
+  });
+
+  /* ---------- точки A и B ---------- */
+  function pinIcon(cls, letter) {
+    return divIcon('<div class="pin ' + cls + '"><span>' + letter + '</span></div>', '', 30, 30, 4, 30);
+  }
+  function coordText(p) { return p.lat.toFixed(5) + ', ' + p.lon.toFixed(5); }
+  function renderAB() {
+    abLayer.clearLayers();
+    ['A', 'B'].forEach(function (k) {
+      var p = store[k];
+      var info = $('#info' + k);
+      if (!p || (k === 'B' && store.prefs.loop)) { if (k === 'A') { info.textContent = 'не задана'; info.classList.remove('set'); } return; }
+      info.textContent = (p.label ? p.label + ' · ' : '') + coordText(p);
+      info.classList.add('set');
+      var m = L.marker([p.lat, p.lon], { icon: pinIcon(k === 'A' ? 'pin-a' : 'pin-b', k), draggable: true, title: k === 'A' ? 'Старт' : 'Финиш' });
+      m.on('dragend', function () {
+        var ll = m.getLatLng();
+        store[k] = { lat: ll.lat, lon: ll.lng };
+        $('#q' + k).value = '';
+        renderAB(); save();
+      });
+      abLayer.addLayer(m);
+    });
+  }
+  function setPoint(k, lat, lon, label) {
+    store[k] = { lat: lat, lon: lon, label: label || '' };
+    $('#q' + k).value = label || coordText(store[k]);
+    renderAB(); save();
+  }
+
+  /* ---------- поиск адреса ---------- */
+  function wireSearch(k) {
+    var input = $('#q' + k), box = $('#sug' + k), timer = null;
+    function hide() { box.hidden = true; box.innerHTML = ''; }
+    async function run() {
+      var q = input.value.trim();
+      if (q.length < 3) { hide(); return; }
+      var m = /^\s*(-?\d{1,2}[.,]\d+)\s*[,; ]\s*(-?\d{1,3}[.,]\d+)\s*$/.exec(q);
+      if (m) {
+        setPoint(k, parseFloat(m[1].replace(',', '.')), parseFloat(m[2].replace(',', '.')));
+        map.setView([store[k].lat, store[k].lon], Math.max(map.getZoom(), 15));
+        hide(); return;
+      }
+      try {
+        var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ru&viewbox=36.7,56.1,38.2,55.2&q=' + encodeURIComponent(q);
+        var r = await fetch(url);
+        var list = await r.json();
+        box.innerHTML = '';
+        if (!list.length) { box.appendChild(el('button', { type: 'button', disabled: true }, 'Ничего не найдено')); box.hidden = false; return; }
+        list.forEach(function (it) {
+          var parts = (it.display_name || '').split(', ');
+          box.appendChild(el('button', {
+            type: 'button', onclick: function () {
+              var lat = parseFloat(it.lat), lon = parseFloat(it.lon);
+              setPoint(k, lat, lon, parts[0]);
+              map.setView([lat, lon], Math.max(map.getZoom(), 15));
+              hide();
+            }
+          }, parts[0], el('small', null, parts.slice(1, 4).join(', '))));
+        });
+        box.hidden = false;
+      } catch (e) { toast('Поиск адреса недоступен. Укажите точку на карте.'); hide(); }
+    }
+    input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 700); });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); run(); } });
+    document.addEventListener('click', function (e) { if (!box.contains(e.target) && e.target !== input) hide(); });
+  }
+  wireSearch('A'); wireSearch('B');
+  $('#pickA').addEventListener('click', function () { setMode(S.mode === 'A' ? null : 'A', 'Нажмите на карте, где старт (точка A)'); });
+  $('#pickB').addEventListener('click', function () { setMode(S.mode === 'B' ? null : 'B', 'Нажмите на карте, где финиш (точка B)'); });
+  $('#locA').addEventListener('click', function () {
+    if (!navigator.geolocation) { toast('Браузер не умеет определять местоположение.'); return; }
+    navigator.geolocation.getCurrentPosition(function (p) {
+      setPoint('A', p.coords.latitude, p.coords.longitude, 'Моё местоположение');
+      map.setView([p.coords.latitude, p.coords.longitude], 15);
+    }, function () { toast('Не удалось определить местоположение.'); }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+  /* ---------- настройки ---------- */
+  function syncPrefs() {
+    var p = store.prefs;
+    $('#km').value = p.km; $('#tol').value = String(p.tol);
+    $('#loop').checked = p.loop; $('#fieldB').hidden = p.loop;
+    $('#prefMain').value = p.main; $('#prefAppeal').value = p.appeal; $('#prefNovelty').value = p.novelty; $('#prefPoi').value = p.poi;
+    $('#avoidSteps').checked = p.avoidSteps; $('#strictGates').checked = p.strictGates;
+    $('#kmStep').value = String(p.kmStep); $('#pace').value = p.pace;
+    outputs();
+    document.querySelectorAll('#kmChips .chip').forEach(function (c) { c.setAttribute('aria-pressed', String(parseFloat(c.dataset.km) === parseFloat(p.km))); });
+  }
+  function outputs() {
+    var p = store.prefs;
+    $('#outMain').textContent = p.main === 0 ? 'не важно' : p.main + '%';
+    $('#outAppeal').textContent = p.appeal === 0 ? 'не важно' : p.appeal + '%';
+    $('#outNovelty').textContent = p.novelty === 0 ? 'без разницы' : (p.novelty > 0 ? 'новые ' : 'знакомые ') + Math.abs(p.novelty) + '%';
+    $('#outPoi').textContent = p.poi === 0 ? 'не важно' : p.poi + '%';
+  }
+  function bindPref(id, key, conv) {
+    $(id).addEventListener('input', function (e) {
+      var t = e.target;
+      store.prefs[key] = conv ? conv(t) : (t.type === 'checkbox' ? t.checked : t.value);
+      outputs(); save();
+      if (key === 'km') document.querySelectorAll('#kmChips .chip').forEach(function (c) { c.setAttribute('aria-pressed', String(parseFloat(c.dataset.km) === parseFloat(store.prefs.km))); });
+      if (key === 'loop') { $('#fieldB').hidden = t.checked; renderAB(); }
+      if (key === 'kmStep' && S.sel >= 0) drawRoutes();
+      if (key === 'pace') renderResults();
+    });
+  }
+  bindPref('#km', 'km', function (t) { return Math.max(1, Math.min(60, parseFloat(t.value) || 10)); });
+  bindPref('#tol', 'tol', function (t) { return parseFloat(t.value); });
+  bindPref('#loop', 'loop');
+  bindPref('#prefMain', 'main', function (t) { return parseInt(t.value, 10); });
+  bindPref('#prefAppeal', 'appeal', function (t) { return parseInt(t.value, 10); });
+  bindPref('#prefNovelty', 'novelty', function (t) { return parseInt(t.value, 10); });
+  bindPref('#prefPoi', 'poi', function (t) { return parseInt(t.value, 10); });
+  bindPref('#avoidSteps', 'avoidSteps');
+  bindPref('#strictGates', 'strictGates');
+  bindPref('#kmStep', 'kmStep', function (t) { return parseFloat(t.value); });
+  bindPref('#pace', 'pace');
+  $('#kmChips').addEventListener('click', function (e) {
+    var b = e.target.closest('.chip'); if (!b) return;
+    store.prefs.km = parseFloat(b.dataset.km); syncPrefs(); save();
+  });
+  syncPrefs();
+
+  function paceMin() {
+    var m = /^\s*(\d{1,2})\s*[:.,]\s*(\d{1,2})\s*$/.exec(store.prefs.pace || '');
+    if (m) return parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
+    var n = parseFloat(store.prefs.pace);
+    return n > 0 ? n : 6;
+  }
+  function fmtTime(mins) {
+    var t = Math.round(mins), h = Math.floor(t / 60), m = t % 60;
+    return h ? h + ' ч ' + (m < 10 ? '0' : '') + m + ' мин' : m + ' мин';
+  }
+
+  /* ---------- слои карты ---------- */
+  function syncLayers() {
+    var ly = store.layers;
+    $('#lyExplored').checked = ly.explored; $('#lyPlaces').checked = ly.places; $('#lyGates').checked = ly.gates;
+    $('#showOsm').checked = ly.osm;
+    toggleLayer(exploredLayer, ly.explored); toggleLayer(placesLayer, ly.places);
+    toggleLayer(gatesLayer, ly.gates); toggleLayer(closedLayer, ly.gates); toggleLayer(osmLayer, ly.osm);
+  }
+  function toggleLayer(layer, on) { if (on && !map.hasLayer(layer)) map.addLayer(layer); if (!on && map.hasLayer(layer)) map.removeLayer(layer); }
+  [['#lyExplored', 'explored'], ['#lyPlaces', 'places'], ['#lyGates', 'gates']].forEach(function (p) {
+    $(p[0]).addEventListener('change', function (e) { store.layers[p[1]] = e.target.checked; syncLayers(); save(); });
+  });
+  $('#showOsm').addEventListener('change', function (e) { store.layers.osm = e.target.checked; syncLayers(); save(); });
+  L.DomEvent.disableClickPropagation($('#maptools'));
+  L.DomEvent.disableClickPropagation($('#banner'));
+
+  /* ---------- Overpass ---------- */
+  async function overpass(query, signal) {
+    var lastErr = null;
+    for (var i = 0; i < OVERPASS.length; i++) {
+      if (signal.aborted) throw new DOMException('Отменено', 'AbortError');
+      var ctrl = new AbortController();
+      var to = setTimeout(function () { ctrl.abort(); }, 180000);
+      var onAbort = function () { ctrl.abort(); };
+      signal.addEventListener('abort', onAbort);
+      try {
+        var resp = await fetch(OVERPASS[i], {
+          method: 'POST', body: 'data=' + encodeURIComponent(query),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctrl.signal
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var json = await resp.json();
+        if (json.remark && /runtime error|out of memory/i.test(json.remark) && !(json.elements && json.elements.length)) throw new Error(json.remark);
+        return json;
+      } catch (e) {
+        if (signal.aborted) throw new DOMException('Отменено', 'AbortError');
+        lastErr = e;
+      } finally {
+        clearTimeout(to); signal.removeEventListener('abort', onAbort);
+      }
+    }
+    throw lastErr || new Error('Overpass недоступен');
+  }
+
+  /* ---------- места ---------- */
+  var catSelect = $('#placeCat');
+  ['view', 'park', 'water', 'trail', 'sight', 'other'].forEach(function (k) { catSelect.appendChild(el('option', { value: k }, CATS[k][0])); });
+
+  function poiIcon(cat, osm, via) {
+    var c = (CATS[cat] || CATS.other)[1];
+    return divIcon('<div class="poi' + (osm ? ' osm' : '') + (via ? ' is-via' : '') + '" style="--c:' + c + '"></div>', '', 22, 22);
+  }
+  function isForced(id) { return S.forced.some(function (f) { return f.id === id; }); }
+  function toggleForced(p) {
+    if (isForced(p.id)) S.forced = S.forced.filter(function (f) { return f.id !== p.id; });
+    else S.forced.push({ id: p.id, name: p.name || 'Без названия', lat: p.lat, lon: p.lon });
+    renderForced(); renderPlaces(); renderOsm(); map.closePopup();
+  }
+  function renderForced() {
+    var box = $('#forcedList'); box.innerHTML = '';
+    S.forced.forEach(function (f) {
+      box.appendChild(el('span', { class: 'tag' }, f.name, el('button', { type: 'button', 'aria-label': 'Убрать ' + f.name, onclick: function () { toggleForced(f); } }, '×')));
+    });
+    $('#forcedHint').hidden = S.forced.length > 0;
+  }
+  function popupFor(p, buttons) {
+    return el('div', { class: 'pop' },
+      el('strong', null, p.name || 'Без названия'),
+      el('div', { class: 'sub' }, (CATS[p.cat] || CATS.other)[0]),
+      el('div', { class: 'popbtns' }, buttons.map(function (b) { return el('button', { type: 'button', class: b.on ? 'on' : '', onclick: b.fn }, b.label); })));
+  }
+  function renderPlaces() {
+    placesLayer.clearLayers();
+    var list = $('#placesList'); list.innerHTML = '';
+    store.places.forEach(function (p) {
+      var m = L.marker([p.lat, p.lon], { icon: poiIcon(p.cat, false, isForced(p.id)), title: p.name });
+      m.bindPopup(function () {
+        return popupFor(p, [
+          { label: isForced(p.id) ? 'Убрать из маршрута' : 'Пройти через', on: isForced(p.id), fn: function () { toggleForced(p); } },
+          { label: 'Удалить', fn: function () { removePlace(p.id); } }
+        ]);
+      });
+      placesLayer.addLayer(m);
+      list.appendChild(el('div', { class: 'item' },
+        el('div', { class: 'grow' }, el('div', { class: 'name' }, p.name || 'Без названия'), el('div', { class: 'meta' }, CATS[p.cat] ? CATS[p.cat][0] : 'Другое')),
+        el('button', { class: 'btn small', type: 'button', onclick: function () { map.setView([p.lat, p.lon], 16); m.openPopup(); } }, 'Показать'),
+        el('button', { class: 'btn small', type: 'button', 'aria-pressed': String(isForced(p.id)), onclick: function () { toggleForced(p); } }, isForced(p.id) ? 'В маршруте' : 'Через неё'),
+        el('button', { class: 'btn small danger', type: 'button', 'aria-label': 'Удалить ' + p.name, onclick: function () { removePlace(p.id); } }, '×')));
+    });
+  }
+  function removePlace(id) {
+    store.places = store.places.filter(function (p) { return p.id !== id; });
+    S.forced = S.forced.filter(function (f) { return f.id !== id; });
+    renderForced(); renderPlaces(); save();
+  }
+  function startPlaceForm(lat, lon) {
+    S.pendingPlace = { lat: lat, lon: lon };
+    $('#placeForm').hidden = false;
+    $('#tab-places').click();
+    $('#placeName').value = ''; $('#placeName').focus();
+  }
+  $('#addPlaceBtn').addEventListener('click', function () { setMode('place', 'Нажмите на карте, чтобы добавить место'); });
+  $('#placeCancel').addEventListener('click', function () { S.pendingPlace = null; $('#placeForm').hidden = true; });
+  $('#placeSave').addEventListener('click', function () {
+    if (!S.pendingPlace) return;
+    store.places.push({ id: uid(), name: $('#placeName').value.trim() || 'Без названия', cat: $('#placeCat').value, lat: S.pendingPlace.lat, lon: S.pendingPlace.lon });
+    S.pendingPlace = null; $('#placeForm').hidden = true;
+    renderPlaces(); save();
+  });
+
+  function renderOsm() {
+    osmLayer.clearLayers();
+    var shown = S.osmPois.slice(0, 700);
+    shown.forEach(function (p) {
+      var cat = CATS[p.cat] ? p.cat : 'other';
+      var m = L.marker([p.lat, p.lon], { icon: poiIcon(cat, true, isForced(p.id)), title: p.name });
+      m.bindPopup(function () {
+        return popupFor({ name: p.name, cat: cat }, [
+          { label: isForced(p.id) ? 'Убрать из маршрута' : 'Пройти через', on: isForced(p.id), fn: function () { toggleForced(p); } },
+          { label: 'В мои места', fn: function () {
+            store.places.push({ id: uid(), name: p.name || 'Без названия', cat: cat, lat: p.lat, lon: p.lon });
+            renderPlaces(); save(); map.closePopup(); toast('Место добавлено в «Мои места».');
+          } }
+        ]);
+      });
+      osmLayer.addLayer(m);
+    });
+    $('#osmInfo').textContent = S.osmPois.length ? 'Загружено мест: ' + S.osmPois.length + (S.osmPois.length > 700 ? ' (на карте первые 700)' : '') : '';
+  }
+  $('#loadOsm').addEventListener('click', async function () {
+    if (map.getZoom() < 13) { toast('Приблизьте карту (масштаб 13 и крупнее), затем загрузите места.'); return; }
+    var b = map.getBounds();
+    var area = '(' + b.getSouth().toFixed(5) + ',' + b.getWest().toFixed(5) + ',' + b.getNorth().toFixed(5) + ',' + b.getEast().toFixed(5) + ')';
+    var btn = $('#loadOsm'); btn.disabled = true; $('#osmInfo').textContent = 'Загружаю…';
+    try {
+      var ac = new AbortController();
+      var json = await overpass(Core.contextQuery(area), ac.signal);
+      var ctx = Core.parseContext(json);
+      var have = {}; S.osmPois.forEach(function (p) { have[p.id] = 1; });
+      ctx.pois.forEach(function (p) { if (!have[p.id]) { S.osmPois.push({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, cat: p.cat }); } });
+      store.layers.osm = true; syncLayers(); renderOsm(); save();
+    } catch (e) { $('#osmInfo').textContent = ''; toast('Не удалось загрузить места. Попробуйте позже.'); }
+    btn.disabled = false;
+  });
+
+  /* ---------- изученные улицы ---------- */
+  function lineKm(lines) { return lines.reduce(function (s, l) { return s + Core.polyLength(l); }, 0); }
+  function renderExplored() {
+    exploredLayer.clearLayers();
+    var list = $('#exploredList'); list.innerHTML = '';
+    var total = 0;
+    store.explored.forEach(function (en) {
+      total += en.km || 0;
+      en.lines.forEach(function (ln) {
+        exploredLayer.addLayer(L.polyline(ln, { color: '#7A3FA8', weight: 5, opacity: 0.55, lineCap: 'round', lineJoin: 'round', interactive: false }));
+      });
+      list.appendChild(el('div', { class: 'item' },
+        el('div', { class: 'grow' }, el('div', { class: 'name' }, en.name), el('div', { class: 'meta' }, fmtKm(en.km || 0) + ' км · ' + (en.kind === 'gpx' ? 'GPX' : en.kind === 'route' ? 'маршрут' : 'вручную') + ' · ' + (en.added || ''))),
+        el('button', { class: 'btn small', type: 'button', onclick: function () {
+          var pts = []; en.lines.forEach(function (l) { pts = pts.concat(l); });
+          if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+        } }, 'Показать'),
+        el('button', { class: 'btn small danger', type: 'button', 'aria-label': 'Удалить ' + en.name, onclick: function () {
+          store.explored = store.explored.filter(function (x) { return x.id !== en.id; });
+          renderExplored(); save();
+        } }, '×')));
+    });
+    $('#exploredTotal').textContent = store.explored.length ? 'Записей: ' + store.explored.length + ', всего ' + fmtKm(total) + ' км следов (повторы считаются)' : 'Пока ничего не отмечено';
+  }
+  function addExplored(name, kind, lines) {
+    var clean = lines.map(function (l) { return Core.simplifyDP(l, 4).map(round5); }).filter(function (l) { return l.length > 1; });
+    if (!clean.length) return false;
+    store.explored.push({ id: uid(), name: name, kind: kind, added: new Date().toLocaleDateString('ru-RU'), lines: clean, km: lineKm(clean) });
+    renderExplored(); save();
+    return true;
+  }
+  $('#importGpx').addEventListener('click', function () { $('#gpxFiles').click(); });
+  $('#gpxFiles').addEventListener('change', async function (e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
+    var ok = 0, empty = 0;
+    for (var i = 0; i < files.length; i++) {
+      try {
+        var gpx = Core.parseGPX(await files[i].text());
+        if (addExplored(gpx.name || files[i].name.replace(/\.gpx$/i, ''), 'gpx', gpx.tracks)) ok++; else empty++;
+      } catch (err) { empty++; }
+    }
+    e.target.value = '';
+    toast('Загружено файлов: ' + ok + (empty ? ', без трека: ' + empty : ''));
+    var pts = []; store.explored.slice(-ok).forEach(function (en) { en.lines.forEach(function (l) { pts = pts.concat(l); }); });
+    if (ok && pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+  });
+
+  /* ручная разметка: клики по улице, между кликами путь по пешеходным улицам, если граф загружен */
+  function clearDraft() { S.draft = { coords: [], hist: [], lastNode: null }; draftLayer.clearLayers(); }
+  function drawDraft() {
+    draftLayer.clearLayers();
+    if (S.draft.coords.length) draftLayer.addLayer(L.polyline(S.draft.coords, { color: '#7A3FA8', weight: 6, opacity: 0.85, interactive: false }));
+    S.draft.hist.forEach(function (h) {
+      if (h.pt) draftLayer.addLayer(L.marker(h.pt, { icon: divIcon('<div class="draftpt"></div>', '', 14, 14), interactive: false, keyboard: false }));
+    });
+  }
+  function drawClick(ll) {
+    var d = S.draft, p = [ll.lat, ll.lng], g = S.graph, snap = null;
+    if (g) snap = Core.nearestNode(g, ll.lat, ll.lng, 60, 10);
+    var before = d.coords.length, prevNode = d.lastNode;
+    if (snap && prevNode !== null && g.comp[prevNode] === g.comp[snap.node]) {
+      if (!S.router) S.router = Core.makeRouter(g);
+      var path = Core.shortestPath(g, S.router, prevNode, snap.node);
+      if (path) d.coords = d.coords.concat(path.slice(d.coords.length ? 1 : 0));
+      else d.coords.push(p);
+    } else if (snap) d.coords.push([g.lat[snap.node], g.lon[snap.node]]);
+    else d.coords.push(p);
+    d.hist.push({ n: d.coords.length - before, prev: prevNode, pt: snap ? [g.lat[snap.node], g.lon[snap.node]] : p });
+    d.lastNode = snap ? snap.node : null;
+    drawDraft();
+  }
+  $('#bannerUndo').addEventListener('click', function () {
+    var d = S.draft, h = d.hist.pop();
+    if (!h) return;
+    d.coords.length = Math.max(0, d.coords.length - h.n); d.lastNode = h.prev;
+    drawDraft();
+  });
+  $('#bannerOk').addEventListener('click', function () {
+    var coords = S.draft.coords.slice();
+    if (coords.length < 2) { toast('Поставьте хотя бы две точки вдоль улицы.'); return; }
+    addExplored('Отметка ' + new Date().toLocaleDateString('ru-RU'), 'manual', [coords]);
+    setMode(null);
+  });
+  $('#drawBtn').addEventListener('click', function () {
+    setMode('draw', S.graph ? 'Кликайте по улицам вдоль пройденного пути: между точками линия ляжет по пешеходным улицам' : 'Кликайте вдоль пройденного пути (улицы подтянутся точнее после первого построения маршрута)');
+  });
+
+  /* ---------- построение маршрутов ---------- */
+  function say(msg, kind) { var s = $('#status'); s.textContent = msg || ''; s.className = 'status' + (kind ? ' ' + kind : ''); }
+  function setBusy(b, abortable) {
+    S.busy = b;
+    $('#go').hidden = b; $('#cancel').hidden = !b; $('#prog').hidden = !b;
+  }
+  $('#cancel').addEventListener('click', function () { if (S.abort) S.abort.abort(); });
+
+  function contextForGraph() {
+    var ctx = S.net && S.net.ctx ? S.net.ctx : { parks: [], pois: [] };
+    var pois = ctx.pois.slice();
+    var have = {}; pois.forEach(function (p) { have[p.id] = 1; });
+    S.osmPois.forEach(function (p) { if (!have[p.id]) pois.push({ id: p.id, lat: p.lat, lon: p.lon, name: p.name, cat: p.cat }); });
+    store.places.forEach(function (p) { pois.push({ id: p.id, lat: p.lat, lon: p.lon, name: p.name, cat: p.cat, mine: true }); });
+    return { parks: ctx.parks, pois: pois };
+  }
+
+  function renderClosed() {
+    gatesLayer.clearLayers(); closedLayer.clearLayers();
+    var g = S.graph; if (!g) return;
+    g.closedWays.forEach(function (ln) {
+      closedLayer.addLayer(L.polyline(ln, { color: '#B3261E', weight: 2, dashArray: '4 5', opacity: 0.9, interactive: false }));
+    });
+    g.closedGates.forEach(function (c) {
+      var m = L.marker([c.lat, c.lon], { icon: divIcon('<div class="gate"></div>', '', 16, 16), keyboard: false, title: 'Закрыто для пешехода' });
+      m.bindPopup('Закрытый проход: ' + c.barrier + (c.access ? ' (access=' + c.access + ')' : '') + (c.name ? ', ' + c.name : ''));
+      gatesLayer.addLayer(m);
+    });
+  }
+
+  async function generate() {
+    if (S.busy) return;
+    var prefs = store.prefs, A = store.A;
+    if (!A) { say('Сначала поставьте точку A: введите адрес или нажмите значок прицела.', 'warn'); return; }
+    var B = prefs.loop ? A : store.B;
+    if (!B) { say('Задайте финиш B или включите круговой маршрут.', 'warn'); return; }
+    var Lm = prefs.km * 1000;
+    var d = Core.hav(A.lat, A.lon, B.lat, B.lon);
+    if (!prefs.loop && Lm < d * 1.02) { say('Расстояние между A и B по прямой уже ' + fmtKm(d) + ' км. Увеличьте дистанцию.', 'warn'); return; }
+
+    var ac = new AbortController(); S.abort = ac;
+    setBusy(true); say('Готовлюсь…');
+    var prog = $('#prog'); prog.removeAttribute('value');
+    try {
+      var R = Core.loadRadius(d, Lm, 5000);
+      var need = { A: [A.lat, A.lon], B: [B.lat, B.lon], R: R };
+      if (!S.net || !Core.regionContains(S.net.region, need)) {
+        say('Загружаю улицы из OpenStreetMap (зона радиусом ' + fmt1(R / 1000) + ' км). Это может занять до минуты…');
+        var area = Core.aroundStr(R, need.A, need.B);
+        var json = await overpass(Core.networkQuery(area), ac.signal);
+        var parsed = Core.parseNetwork(json);
+        if (!parsed.ways.length) throw new Error('В этой зоне не нашлось улиц.');
+        S.net = { region: need, parsed: parsed, ctx: null };
+        S.graph = null;
+        say('Загружаю парки и интересные места…');
+        try { S.net.ctx = Core.parseContext(await overpass(Core.contextQuery(area), ac.signal)); }
+        catch (e) { if (ac.signal.aborted) throw e; S.net.ctx = null; toast('Парки и места не загрузились. Маршрут строится без них.'); }
+        if (R >= 5000 && Lm / 2.5 > 5000) toast('Для такой длины зона ограничена радиусом 5 км. Маршруты могут получиться короче.');
+      }
+      var key = JSON.stringify([prefs.avoidSteps, prefs.strictGates]);
+      if (!S.graph || S.graphKey !== key) {
+        say('Строю граф улиц…'); await tick();
+        S.graph = Core.buildGraph(S.net.parsed, { avoidSteps: prefs.avoidSteps, strictGates: prefs.strictGates });
+        S.graphKey = key; S.router = null;
+      }
+      var g = S.graph;
+      say('Учитываю парки, места и изученные улицы…'); await tick();
+      Core.applyContext(g, contextForGraph());
+      var allLines = []; store.explored.forEach(function (en) { allLines = allLines.concat(en.lines); });
+      Core.applyExplored(g, allLines);
+      renderClosed();
+
+      var comp = 30;
+      var sA = Core.nearestNode(g, A.lat, A.lon, 400, comp);
+      var sB = Core.nearestNode(g, B.lat, B.lon, 400, comp);
+      if (!sA) throw new Error('Рядом с точкой A нет проходимых улиц. Сдвиньте точку.');
+      if (!sB) throw new Error('Рядом с точкой B нет проходимых улиц. Сдвиньте точку.');
+      if (g.comp[sA.node] !== g.comp[sB.node]) throw new Error('Между A и B нет пути без закрытых проходов. Включите слой «Закрытые проходы» и сдвиньте точки.');
+
+      var forced = [], skipped = 0;
+      S.forced.forEach(function (f) {
+        var s = Core.nearestNode(g, f.lat, f.lon, 250, comp);
+        if (s && g.comp[s.node] === g.comp[sA.node]) forced.push(s.node); else skipped++;
+      });
+      var attract = [];
+      g.pois.slice(0, 400).forEach(function (p) {
+        var s = Core.nearestNode(g, p.lat, p.lon, 120, comp);
+        if (s) attract.push(s.node);
+      });
+
+      var gen = Core.createGenerator(g, {
+        A: sA.node, B: sB.node, length: Lm, tol: prefs.tol, count: 4, seed: (Math.random() * 1e9) | 0,
+        forced: forced, attract: attract, maxAttempts: 200,
+        prefs: { appeal: prefs.appeal / 100, mainAvoid: prefs.main / 100, novelty: prefs.novelty / 100, poi: prefs.poi / 100 }
+      });
+      if (gen.state.error) throw new Error('В зоне слишком мало улиц для такой длины. Уменьшите дистанцию или сдвиньте старт.');
+      prog.max = 100; prog.value = 0;
+      while (!gen.run(35)) {
+        var pr = gen.progress();
+        prog.value = Math.round(100 * pr.attempts / pr.max);
+        say('Подбираю маршруты: ' + pr.attempts + ' из ' + pr.max + ', подходящих ' + pr.accepted);
+        await tick();
+        if (ac.signal.aborted) throw new DOMException('Отменено', 'AbortError');
+      }
+      var res = gen.results();
+      S.routes = res.routes.map(function (r, i) { r.color = ROUTE_COLORS[i % ROUTE_COLORS.length]; return r; });
+      S.sel = S.routes.length ? 0 : -1;
+      if (!S.routes.length) {
+        say('Не удалось подобрать маршрут нужной длины. Измените дистанцию, увеличьте допуск или сдвиньте точки.', 'warn');
+      } else {
+        var msg = 'Найдено маршрутов: ' + S.routes.length + '.';
+        if (res.approx) msg += ' Точно в допуск не попали, показаны ближайшие по длине.';
+        if (skipped) msg += ' Мест вне зоны или за закрытыми проходами пропущено: ' + skipped + '.';
+        if (sA.dist > 100 || sB.dist > 100) msg += ' Старт или финиш сдвинуты к ближайшей улице.';
+        say(msg, 'ok');
+      }
+      renderResults(); drawRoutes(true);
+    } catch (e) {
+      if (e && e.name === 'AbortError') say('Построение отменено.');
+      else say((e && e.message) || 'Не удалось построить маршрут.', 'warn');
+    } finally {
+      setBusy(false); S.abort = null;
+    }
+  }
+  $('#go').addEventListener('click', generate);
+
+  /* ---------- вывод маршрутов ---------- */
+  function routeName(i) { return 'Вариант ' + (i + 1); }
+  function renderResults() {
+    var box = $('#results'); box.innerHTML = '';
+    S.routes.forEach(function (r, i) {
+      var m = r.metrics, mins = (r.length / 1000) * paceMin();
+      var card = el('article', { class: 'route', 'aria-current': String(i === S.sel), onclick: function () { selectRoute(i); } },
+        el('header', null, el('span', { class: 'swatch', style: '--c:' + r.color }), el('h3', null, routeName(i)), el('span', { class: 'len' }, fmtKm(r.length) + ' км')),
+        el('dl', { class: 'stats' },
+          stat('Время', '≈ ' + fmtTime(mins)),
+          stat('Оценка', Math.round(r.score) + ' / 100'),
+          stat('Новые улицы', Math.round(m.newShare * 100) + '%'),
+          stat('Тропы и парки', Math.round(Math.max(m.pathShare, m.parkShare) * 100) + '%'),
+          stat('Повороты', fmt1(m.turnsPerKm) + ' на км'),
+          stat('Переходы', String(m.crossings))),
+        m.streets.length ? el('p', null, 'Улицы: ' + m.streets.join(', ')) : null,
+        m.pois.length ? el('p', null, 'По пути: ' + m.pois.slice(0, 5).map(function (p) { return p.name || (CATS[p.cat] || CATS.other)[0]; }).join(', ')) : null,
+        r.off ? el('p', { class: 'note' }, 'Длина отличается от заданной на ' + Math.round(r.err * 100) + '%') : null,
+        m.stepsLen > 0 ? el('p', { class: 'note' }, 'Есть лестницы: ' + Math.round(m.stepsLen) + ' м') : null,
+        el('div', { class: 'actions' },
+          el('button', { class: 'btn primary small', type: 'button', onclick: function (e) { e.stopPropagation(); downloadGpx(i); } }, 'Скачать GPX'),
+          el('button', { class: 'btn small', type: 'button', onclick: function (e) { e.stopPropagation(); markRoute(i); } }, 'Отметить пройденным')));
+      box.appendChild(card);
+    });
+  }
+  function stat(k, v) { return el('div', null, el('dt', null, k), el('dd', null, v)); }
+  function selectRoute(i) {
+    S.sel = i; renderResults(); drawRoutes(false);
+    var r = S.routes[i]; if (r) map.fitBounds(L.latLngBounds(r.coords), { padding: [40, 40] });
+  }
+  function drawRoutes(fit) {
+    routesLayer.clearLayers(); kmLayer.clearLayers();
+    S.routes.forEach(function (r, i) {
+      if (i === S.sel) return;
+      routesLayer.addLayer(L.polyline(r.coords, { color: r.color, weight: 5, opacity: 0.5 }).on('click', function () { selectRoute(i); }));
+    });
+    var r = S.routes[S.sel];
+    if (!r) return;
+    routesLayer.addLayer(L.polyline(r.coords, { color: '#FFFFFF', weight: 10, opacity: 0.95, interactive: false }));
+    routesLayer.addLayer(L.polyline(r.coords, { color: r.color, weight: 6, opacity: 1, interactive: false }));
+    Core.kmMarkers(r.coords, store.prefs.kmStep * 1000).forEach(function (mk) {
+      kmLayer.addLayer(L.marker([mk.lat, mk.lon], { icon: divIcon('<div class="kmdot">' + Core.fmtKm(mk.km) + '</div>', '', 26, 26), interactive: false, keyboard: false }));
+    });
+    if (fit) map.fitBounds(L.latLngBounds(r.coords), { padding: [40, 40] });
+  }
+
+  function download(name, text, type) {
+    var blob = new Blob([text], { type: type || 'application/octet-stream' });
+    var url = URL.createObjectURL(blob);
+    var a = el('a', { href: url, download: name });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+  function downloadGpx(i) {
+    var r = S.routes[i]; if (!r) return;
+    var step = store.prefs.kmStep * 1000;
+    var wps = [];
+    var loop = store.prefs.loop;
+    wps.push({ lat: r.coords[0][0], lon: r.coords[0][1], name: loop ? 'Старт и финиш' : 'Старт' });
+    Core.kmMarkers(r.coords, step).forEach(function (mk) { wps.push({ lat: mk.lat, lon: mk.lon, name: Core.fmtKm(mk.km) + ' км' }); });
+    if (!loop) { var last = r.coords[r.coords.length - 1]; wps.push({ lat: last[0], lon: last[1], name: 'Финиш ' + fmtKm(r.length) + ' км' }); }
+    var title = 'Бег ' + fmtKm(r.length) + ' км, вариант ' + (i + 1);
+    var gpx = Core.toGPX({ name: title, desc: 'Беговой атлас Москвы. Метки каждые ' + Core.fmtKm(store.prefs.kmStep) + ' км.', coords: r.coords, waypoints: wps });
+    download('beg-' + fmtKm(r.length).replace(',', '_') + 'km-v' + (i + 1) + '.gpx', gpx, 'application/gpx+xml');
+    toast('GPX сохранён. В Organic Maps откройте файл, и маршрут появится в закладках.');
+  }
+  function markRoute(i) {
+    var r = S.routes[i]; if (!r) return;
+    if (addExplored('Маршрут ' + fmtKm(r.length) + ' км, ' + new Date().toLocaleDateString('ru-RU'), 'route', [r.coords])) toast('Улицы маршрута отмечены как изученные.');
+  }
+
+  var tsel = $('#tileSel');
+  Object.keys(TILES).forEach(function (k) { tsel.appendChild(el('option', { value: k }, TILES[k].name)); });
+  tsel.value = startTiles;
+  tsel.addEventListener('change', function () { store.tiles = tsel.value; setTiles(tsel.value); save(); });
+
+  /* ---------- резервная копия ---------- */
+  $('#exportData').addEventListener('click', function () {
+    download('begovoj-atlas-kopiya.json', JSON.stringify({ app: 'begovoj-atlas', version: 1, explored: store.explored, places: store.places, prefs: store.prefs }), 'application/json');
+  });
+  $('#importData').addEventListener('click', function () { $('#dataFile').click(); });
+  $('#dataFile').addEventListener('change', async function (e) {
+    var f = e.target.files && e.target.files[0]; if (!f) return;
+    try {
+      var d = JSON.parse(await f.text());
+      if (d.app !== 'begovoj-atlas') throw new Error('bad');
+      var haveE = {}; store.explored.forEach(function (x) { haveE[x.id] = 1; });
+      (d.explored || []).forEach(function (x) { if (x && x.id && Array.isArray(x.lines) && !haveE[x.id]) store.explored.push(x); });
+      var haveP = {}; store.places.forEach(function (x) { haveP[x.id] = 1; });
+      (d.places || []).forEach(function (x) { if (x && x.id && !haveP[x.id]) store.places.push(x); });
+      if (d.prefs) Object.assign(store.prefs, d.prefs);
+      syncPrefs(); renderExplored(); renderPlaces(); save();
+      toast('Копия загружена.');
+    } catch (err) { toast('Это не копия Беговой атлас.'); }
+    e.target.value = '';
+  });
+
+  /* ---------- старт ---------- */
+  syncLayers(); renderExplored(); renderPlaces(); renderForced(); renderAB();
+  if (store.A) $('#qA').value = store.A.label || coordText(store.A);
+  if (store.B) $('#qB').value = store.B.label || coordText(store.B);
+  window.__atlas = { map: map, store: store, S: S, Core: Core, generate: generate };
+})();
+
+</script>
+</body>
+</html>
