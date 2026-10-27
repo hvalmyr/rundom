@@ -2,9 +2,9 @@
 import L from 'leaflet';
 import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
-import { overpass } from '../data/overpass.js';
+import { loadStreets } from '../data/streets.js';
 import { cssVar, divIcon } from '../map/map.js';
-import { $, el, tick, fmt1, fmtKm, fmtNum, fmtTime, toast, download, syncSeg, uid } from './dom.js';
+import { $, el, tick, fmtKm, fmtNum, fmtTime, toast, download, syncSeg, uid } from './dom.js';
 
 const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>';
 
@@ -317,16 +317,12 @@ export function initRoutePanel(app) {
       const R = Core.loadRadius(d, Lm, 5000);
       const need = { A: [A.lat, A.lon], B: [B.lat, B.lon], R };
       if (!S.net || !Core.regionContains(S.net.region, need)) {
-        say('Загружаю улицы из OpenStreetMap в радиусе ' + fmt1(R / 1000) + ' км. Это может занять до минуты…');
-        const area = Core.aroundStr(R, need.A, need.B);
-        const parsed = Core.parseNetwork(await overpass(Core.networkQuery(area), ac.signal));
-        if (!parsed.ways.length) throw new Error('В этой зоне не нашлось улиц.');
-        S.net = { region: need, parsed, ctx: null };
+        const got = await loadStreets(need, ac.signal, say);
+        if (!got.parsed.ways.length) throw new Error('В этой зоне не нашлось улиц.');
+        S.net = { region: need, parsed: got.parsed, ctx: got.ctx };
         S.graph = null;
         braid(0.15);
-        say('Загружаю парки и интересные места…');
-        try { S.net.ctx = Core.parseContext(await overpass(Core.contextQuery(area), ac.signal)); }
-        catch (e) { if (ac.signal.aborted) throw e; S.net.ctx = null; toast('Парки и места не загрузились. Маршрут строится без них.'); }
+        if (got.ctxFailed) toast('Парки и места не загрузились. Маршрут строится без них.');
         if (R >= 5000 && Lm / 2.5 > 5000) toast('Для такой длины зона ограничена радиусом 5 км. Маршруты могут получиться короче.');
       }
       braid(0.25);

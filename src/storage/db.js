@@ -1,9 +1,9 @@
-/* IndexedDB: треки и избранные маршруты. Геометрия большая, localStorage на ~5 МБ её не вместит.
-   Наружу ничего не уходит: база живёт только в этом браузере. */
+/* IndexedDB: треки, избранные маршруты и кэш улиц из Overpass. Геометрия большая,
+   localStorage на ~5 МБ её не вместит. Наружу ничего не уходит: база живёт только в этом браузере. */
 
 const DB_NAME = 'rundom';
-const VERSION = 1;
-export const STORES = ['tracks', 'favorites'];
+const VERSION = 2;
+export const STORES = ['tracks', 'favorites', 'areas'];
 
 let dbp = null;
 function open() {

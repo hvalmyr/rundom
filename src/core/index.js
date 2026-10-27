@@ -8,3 +8,4 @@ export * from './track.js';
 export * from './coverage.js';
 export * from './cover.js';
 export * from './naming.js';
+export * from './compact.js';

@@ -167,10 +167,22 @@ function applyContext(g, ctx) {
   g.pois = (ctx && ctx.pois) || [];
   g.ePark.fill(0);
   var E = g.E, i;
+  /* сетка парков по их рамкам: ребро проверяется только против парков своей клетки */
+  var PC = 400, pgrid = new Map();
+  g.parks.forEach(function (p) {
+    for (var cx = Math.floor(p.minx / PC); cx <= Math.floor(p.maxx / PC); cx++) {
+      for (var cy = Math.floor(p.miny / PC); cy <= Math.floor(p.maxy / PC); cy++) {
+        var k = cx * 100003 + cy, arr = pgrid.get(k);
+        if (arr) arr.push(p); else pgrid.set(k, [p]);
+      }
+    }
+  });
   for (var e = 0; e < E; e++) {
     var mx = (g.X[g.eF[e]] + g.X[g.eT[e]]) / 2, my = (g.Y[g.eF[e]] + g.Y[g.eT[e]]) / 2;
-    for (i = 0; i < g.parks.length; i++) {
-      var p = g.parks[i];
+    var cand = pgrid.get(Math.floor(mx / PC) * 100003 + Math.floor(my / PC));
+    if (!cand) continue;
+    for (i = 0; i < cand.length; i++) {
+      var p = cand[i];
       if (mx < p.minx || mx > p.maxx || my < p.miny || my > p.maxy) continue;
       if (pointInRing(mx, my, p.xy)) { g.ePark[e] = 1; break; }
     }

@@ -238,3 +238,33 @@ test('coverage: a track along the avenue does not count the first metres of cros
   const up = Core.districtStats(dist, Core.coverTrack(dist, [[[55.751, 37.60253], [55.7535, 37.60253]]]).segs);
   assert.ok(up.byStreet[1] > 250, 'cross street ' + up.byStreet[1]);
 });
+
+test('compact network and context survive a round trip, tiles dedupe shared ways', () => {
+  const net = gridNetwork(6);
+  net.elements.push({ type: 'node', id: 9001, lat: 55.7501, lon: 37.6001, tags: { barrier: 'gate', access: 'private', note: 'x' } });
+  const c = JSON.parse(JSON.stringify(Core.packNetwork(net.elements)));
+  const back = Core.unpackNetwork(c);
+  const g1 = Core.buildGraph(Core.parseNetwork(net), {});
+  const g2 = Core.buildGraph(Core.parseNetwork({ elements: Core.dedupeElements([...back, ...Core.unpackNetwork(c)]) }), {});
+  assert.equal(g2.n, g1.n);
+  assert.equal(g2.E, g1.E);
+  assert.equal(g2.closedGates.length, 1);
+  assert.deepEqual(back.find((e) => e.id === 9001).tags, { barrier: 'gate', access: 'private' });
+
+  const ring = [[55.75, 37.6], [55.751, 37.6], [55.751, 37.602], [55.75, 37.602], [55.75, 37.6]];
+  const ctx = Core.packContext(
+    [{ type: 'way', id: 5, tags: { leisure: 'park', name: 'Сквер' }, rings: [ring] }],
+    [{ type: 'node', id: 7, lat: 55.7505, lon: 37.601, tags: { tourism: 'viewpoint', name: 'Вид' } }]);
+  const parsed = Core.parseContext({ elements: Core.unpackContext(JSON.parse(JSON.stringify(ctx))) });
+  assert.equal(parsed.parks.length, 1);
+  assert.deepEqual(parsed.pois.map((p) => p.cat).sort(), ['park', 'view']);
+});
+
+test('tilesInBox covers the box with grid tiles', () => {
+  const box = [55.75, 37.6, 55.79, 37.66];
+  const keys = Core.tilesInBox(box);
+  const [x0, y0] = Core.tileOf(box[0], box[1]), [x1, y1] = Core.tileOf(box[2], box[3]);
+  assert.equal(keys.length, (x1 - x0 + 1) * (y1 - y0 + 1));
+  assert.ok(keys.length >= 4);
+  assert.ok(keys.includes(Core.tileKey(...Core.tileOf(55.77, 37.63))));
+});

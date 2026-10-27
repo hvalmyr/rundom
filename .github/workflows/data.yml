@@ -1,6 +1,6 @@
 name: Data from OpenStreetMap
 
-# Раз в месяц: свежая выгрузка Москвы → районы, улицы, объекты, тайлы карты → релиз data-YYYY-MM → деплой сайта.
+# Раз в месяц: свежая выгрузка Москвы → районы, улицы, объекты, граф улиц, тайлы карты → релиз data-YYYY-MM → деплой сайта.
 on:
   schedule:
     - cron: '0 3 2 * *'
@@ -34,6 +34,8 @@ jobs:
         run: gh release download --pattern stats.json --dir prev || echo "no previous data release"
       - name: Build
         run: node --max-old-space-size=6144 scripts/data/build.mjs moscow.osm.pbf public/data
+      - name: Street graph tiles
+        run: node --max-old-space-size=6144 scripts/data/graph.mjs moscow.osm.pbf public/data
       - name: Map tiles
         run: |
           mkdir -p tm-store
