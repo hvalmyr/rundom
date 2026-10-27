@@ -317,7 +317,7 @@ export function initCoverageMap(app) {
           /* фото над названием, справа от фото — откуда текст и чьё фото */
           el('div', { class: 'sights' }, known.slice(0, 12).map((p) => el('article', { class: 'sight' },
             el('div', { class: 'sight-top' },
-              p.w.i ? el('img', { src: p.w.i.s, alt: '', loading: 'lazy', decoding: 'async' }) : el('span', { class: 'sight-ic', html: placeSvg(p.c) }),
+              p.w.i ? el('span', { class: 'ph' }, el('img', { src: p.w.i.s, alt: '', loading: 'lazy', decoding: 'async' })) : el('span', { class: 'sight-ic', html: placeSvg(p.c) }),
               el('div', { class: 'sight-src' },
                 el('a', { href: p.w.u, target: '_blank', rel: 'noopener' }, 'Википедия'),
                 el('span', null, 'текст: CC BY-SA'),

@@ -674,7 +674,7 @@ button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17p
 .sights { display: flex; flex-direction: column; gap: var(--space-4); }
 .sight { display: flex; flex-direction: column; gap: 4px; }
 .sight-top { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 10px; align-items: end; margin-bottom: 2px; }
-.sight img, .sight .sight-ic { width: 148px; height: 104px; object-fit: cover; border-radius: 8px; background: var(--surface-sunk); }
+.sight .ph, .sight img, .sight .sight-ic { width: 148px; height: 104px; object-fit: cover; border-radius: 8px; background: var(--surface-sunk); }
 .sight .sight-ic { display: grid; place-items: center; }
 .sight .sight-ic svg { width: 30px; height: 30px; fill: none; stroke: var(--ink-muted); stroke-width: 1.2; }
 .sight-src { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; line-height: 15px; color: var(--ink-muted); overflow-wrap: anywhere; }
@@ -758,3 +758,14 @@ button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17p
 .pcard .facts { font-size: 13px; line-height: 19px; }
 .facts dd.f-oh { white-space: pre-line; }
 .pitem .pname.go .chev { transform: rotate(-45deg); vertical-align: 1px; }
+
+/* фото мест в тон приложения: приглушённые и тонированные петролем; при наведении — как есть */
+.ph { position: relative; display: block; overflow: hidden; border-radius: 8px; isolation: isolate; }
+.ph img { display: block; border-radius: 0 !important; filter: grayscale(.55) contrast(1.04); transition: filter .25s; }
+.ph::after { content: ''; position: absolute; inset: 0; background: #0e5a73; mix-blend-mode: color; opacity: .6; pointer-events: none; transition: opacity .25s; }
+.ph:hover img { filter: none; }
+.ph:hover::after { opacity: 0; }
+.dp-top { display: flex; justify-content: space-between; align-items: center; margin: -4px 0 0; }
+.dp-title { margin: 0; font: 600 18px/24px var(--font-display); }
+/* в панели района действия с местом — каждое своей строкой */
+#dpanel .pcard .btns { grid-auto-flow: row; }

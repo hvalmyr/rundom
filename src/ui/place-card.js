@@ -46,7 +46,7 @@ export const fmtLicense = (l) => LIC[String(l || '').toLowerCase()] || String(l 
 /* фото с Commons: автор и лицензия под ним, ссылка на страницу файла */
 export function photo(i) {
   return el('figure', { class: 'photo' },
-    el('img', { src: i.s, alt: '', loading: 'lazy', decoding: 'async' }),
+    el('span', { class: 'ph' }, el('img', { src: i.s, alt: '', loading: 'lazy', decoding: 'async' })),
     el('figcaption', null, el('a', { href: i.f, target: '_blank', rel: 'noopener' }, 'Фото: ' + fmtCredit(i.a) + ' · ' + fmtLicense(i.l))));
 }
 
@@ -82,13 +82,17 @@ export function placeCard({ p, title, sub, buttons }) {
 const CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 export const phone = window.matchMedia('(max-width: 860px)');
 
-/* шапка панели: название и крестик; back — подпись кнопки «назад» над названием */
+/* шапка панели: название и крестик; back — {t, on}: кнопка «назад» к району */
 export function panelHead(title, onClose, back) {
-  return el('div', { class: 'dp-headwrap' },
-    back ? el('button', { class: 'dp-back', type: 'button', onclick: back.on }, el('span', { class: 'chev', 'aria-hidden': 'true' }), back.t) : null,
-    el('div', { class: 'dp-head' },
-      el('h2', null, title),
-      el('button', { class: 'iconbtn ghost', type: 'button', 'aria-label': 'Закрыть', onclick: onClose, html: CLOSE })));
+  const close = el('button', { class: 'iconbtn ghost', type: 'button', 'aria-label': 'Закрыть', onclick: onClose, html: CLOSE });
+  /* у места внутри района: сверху «назад» и крестик, под ними название */
+  if (back) {
+    return el('div', { class: 'dp-headwrap' },
+      el('div', { class: 'dp-top' },
+        el('button', { class: 'dp-back', type: 'button', onclick: back.on }, el('span', { class: 'chev', 'aria-hidden': 'true' }), back.t), close),
+      el('h2', { class: 'dp-title' }, title));
+  }
+  return el('div', { class: 'dp-head' }, el('h2', null, title), close);
 }
 
 /* панель места, как панель района в «Прогрессе»: на компьютере справа над картой, на телефоне — в листе */
