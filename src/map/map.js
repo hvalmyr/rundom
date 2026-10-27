@@ -1,14 +1,26 @@
 /* Карта Leaflet: подложки, слои, значки и цвета из токенов темы. */
 import L from 'leaflet';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { setWorkerUrl } from 'maplibre-gl';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
 import { store, save } from '../storage/store.js';
 import { toast } from '../ui/dom.js';
+import { vectorPalette, vectorBaseStyle, vectorLabelStyle } from './vector-style.js';
 
 const ATTR_OSM = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 
-const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+/* MapLibre ищет воркер рядом со своим модулем, а Vite его оттуда переносит: путь задаём явно. */
+setWorkerUrl(workerUrl);
+
+const ESRI ='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
 
 /* У «минимальной» подложки подписи идут отдельным слоем поверх линий маршрута. */
 export const TILES = {
+  vector: {
+    name: 'rundom (векторная, прототип)', vector: true,
+    o: { maxZoom: 19, attribution: '© <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © OpenMapTiles ' + ATTR_OSM }
+  },
   carto: {
     name: 'Минимальная (Esri Canvas)',
     url: (dark) => ESRI + (dark ? 'World_Dark_Gray_Base' : 'World_Light_Gray_Base') + '/MapServer/tile/{z}/{y}/{x}',
@@ -53,15 +65,25 @@ export function createMap() {
     if (labelLayer) { map.removeLayer(labelLayer); labelLayer = null; }
     tileErrors = 0;
     const t = TILES[key];
-    if (t.labels) labelLayer = L.tileLayer(t.labels(isDark()), { ...t.o, pane: 'labels', attribution: '' }).addTo(map);
-    tileLayer = L.tileLayer(t.url(isDark()), t.o);
-    tileLayer.on('tileerror', () => {
+    const onError = () => {
       tileErrors++;
       if (tileErrors === 8 && key !== 'carto') {
         store.tiles = 'carto'; save(); setTiles('carto');
         toast('Эта подложка не загружается. Переключился на минимальную.');
       }
-    });
+    };
+    if (t.vector) {
+      const c = vectorPalette(cssVar, isDark());
+      tileLayer = maplibreGL({ style: vectorBaseStyle(c), interactive: false, attribution: t.o.attribution });
+      labelLayer = maplibreGL({ style: vectorLabelStyle(c), interactive: false, pane: 'labels', attribution: '' });
+      tileLayer.addTo(map);
+      labelLayer.addTo(map);
+      for (const l of [tileLayer, labelLayer]) l.getMaplibreMap().on('error', (e) => { console.warn(e.error); onError(); });
+      return;
+    }
+    if (t.labels) labelLayer = L.tileLayer(t.labels(isDark()), { ...t.o, pane: 'labels', attribution: '' }).addTo(map);
+    tileLayer = L.tileLayer(t.url(isDark()), t.o);
+    tileLayer.on('tileerror', onError);
     tileLayer.addTo(map);
     tileLayer.bringToBack();
   }

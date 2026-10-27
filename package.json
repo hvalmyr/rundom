@@ -11,7 +11,9 @@
     "data:districts": "node scripts/build-districts.mjs"
   },
   "dependencies": {
-    "leaflet": "^1.9.4"
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
+    "leaflet": "^1.9.4",
+    "maplibre-gl": "^6.13.0"
   },
   "devDependencies": {
     "vite": "^7.3.7"
