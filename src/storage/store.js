@@ -17,7 +17,7 @@ const DEFAULTS = {
     main: 60, appeal: 40, novelty: 0, poi: 50, avoidSteps: true, strictGates: false, kmStep: 1, pace: '6:00'
   },
   /* v — версия набора слоёв: со 2-й закрытые проходы по умолчанию выключены */
-  layers: { explored: true, places: true, gates: false, osm: false, covPlaces: true, legendOpen: false, v: 2 },
+  layers: { explored: true, places: true, gates: false, osm: false, covPlaces: true, covList: 'districts', legendOpen: false, v: 2 },
   view: { lat: 55.7558, lon: 37.6173, z: 12 },
   theme: 'auto'
 };

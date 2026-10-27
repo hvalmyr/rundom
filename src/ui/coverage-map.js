@@ -383,7 +383,7 @@ export function initCoverageMap(app) {
       ? el('button', { class: 'btn small more-btn', type: 'button', onclick: () => { distShown = distShown > 8 ? 8 : Infinity; renderDistricts(); } },
         distShown > 8 ? 'Свернуть' : 'Все районы · ' + list.length)
       : '');
-    $('#distCount').textContent = list.length;
+    $('#distCount').textContent = ' · ' + list.length;
   }
   async function renderPlaceList() {
     const box = $('#covPlaces');
@@ -395,6 +395,7 @@ export function initCoverageMap(app) {
     }
     const all = dists.flatMap(placesOf);
     const list = all.filter((p) => placeCat === 'all' || p.c === placeCat).sort(byState);
+    $('#placeCount').textContent = all.length ? ' · ' + all.length : '';
     box.replaceChildren(
       catChips(all, placeCat, (c) => { placeCat = c; placeShown = 12; renderPlaceList(); }),
       el('div', { class: 'plist' }, list.slice(0, placeShown).map((p) => {
@@ -438,6 +439,18 @@ export function initCoverageMap(app) {
   }
 
   /* ---------- переключатели ---------- */
+  /* районы и места — один список с переключателем, а не два раздела подряд */
+  function syncList() {
+    const v = store.layers.covList === 'places' ? 'places' : 'districts';
+    syncSeg($('#covListSeg'), 'list', v);
+    $('#covDistricts').hidden = v !== 'districts';
+    $('#covPlacesBox').hidden = v !== 'places';
+  }
+  $('#covListSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    store.layers.covList = b.dataset.list; save(); syncList();
+  });
+  syncList();
   const syncChecks = () => { $('#covPlacesOn').checked = store.layers.covPlaces; };
   $('#covPlacesOn').addEventListener('change', (e) => { store.layers.covPlaces = e.target.checked; save(); drawPlaces(); });
   $('#covLegend').replaceChildren(...[...Array(10)].map((_, k) => el('span', { class: 'cv' + k, title: k * 10 + '–' + (k + 1) * 10 + '%' })));

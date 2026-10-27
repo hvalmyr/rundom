@@ -576,6 +576,10 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .bar > div { height: 100%; background: var(--petrol); border-radius: 3px; }
 
 .drows { display: flex; flex-direction: column; }
+.drows[hidden] { display: none; }
+#covListSeg .sn { color: var(--ink-muted); font-weight: 400; }
+.covplaces { display: flex; flex-direction: column; gap: var(--space-2); }
+.covplaces[hidden] { display: none; }
 .drow, .srow { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 70px 46px; gap: var(--space-2); align-items: center;
   padding: 5px 4px; font-size: 13px; line-height: 18px; cursor: pointer; border-radius: 4px; font-variant-numeric: tabular-nums; }
 .drow:hover, .srow:hover { background: var(--surface-sunk); }
@@ -601,6 +605,7 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
   padding: var(--space-3) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2);
 }
 .dpanel[hidden] { display: none; }
+#dpanelSlot:empty { display: none; }
 #dpanelSlot .dpanel { position: static; width: auto; box-shadow: none; overflow: visible; }
 .dp-head { display: flex; justify-content: space-between; align-items: center; }
 .dp-head h2 { margin: 0; font: 600 18px/24px var(--font-display); }

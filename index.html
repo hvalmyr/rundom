@@ -226,11 +226,14 @@
         <label class="check"><input type="checkbox" id="covPlacesOn"><span>Места на карте</span></label>
       </div>
       <div id="dpanelSlot"></div>
-      <h2 class="sec">Районы <span class="count" id="distCount"></span></h2>
+      <div class="seg" id="covListSeg" role="group" aria-label="Список">
+        <button type="button" data-list="districts">Районы<span class="sn" id="distCount"></span></button><button type="button" data-list="places">Места<span class="sn" id="placeCount"></span></button>
+      </div>
       <div class="drows" id="covDistricts"></div>
-      <h2 class="sec">Места</h2>
-      <select id="placeDist" aria-label="Район"></select>
-      <div id="covPlaces"></div>
+      <div class="covplaces" id="covPlacesBox" hidden>
+        <select id="placeDist" aria-label="Район"></select>
+        <div id="covPlaces"></div>
+      </div>
     </section>
   </aside>
 
