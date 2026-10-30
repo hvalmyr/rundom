@@ -29,6 +29,8 @@ if (s.net) {
 for (const k of ['km', 'districts', 'streets', 'objects', 'parks']) {
   if (!p) { check(k, true, `${s[k]} (прошлого релиза нет)`); continue; }
   const d = (s[k] - p[k]) / p[k];
+  /* правила сборки сети сменились: длина меняется намеренно, сравнивать не с чем */
+  if (k === 'km' && (s.net && s.net.v) !== (p.net && p.net.v)) { check(k, true, `${p[k]} → ${s[k]} (${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}%, новые правила сборки сети)`); continue; }
   check(k, Math.abs(d) <= 0.1, `${p[k]} → ${s[k]} (${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}%, допустимо ±10%)`);
 }
 

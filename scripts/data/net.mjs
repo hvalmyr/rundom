@@ -18,6 +18,8 @@
 import { KX, KY, pointInRing } from '../../src/core/geo.js';
 import { classifyWay } from '../../src/core/osm.js';
 
+/* версия правил сборки сети: при её смене длина сети не сравнивается с прошлым релизом (scripts/data/check.mjs) */
+export const NET_VERSION = 1;
 export const DEAD = 50;     /* м: тупики и петли короче — убираются */
 export const YARD = 1000;   /* м: дворовая сеть на коротких подводах короче — убирается */
 export const ISLAND = 1000; /* м: отдельный кусок без названных улиц короче — убирается */

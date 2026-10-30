@@ -10,7 +10,7 @@ import { gzipSync } from 'node:zlib';
 import { dirname } from 'node:path';
 import { readPbf } from './pbf.mjs';
 import { placeInfo } from './wiki-places.mjs';
-import { streetWay, buildNetwork } from './net.mjs';
+import { streetWay, buildNetwork, NET_VERSION } from './net.mjs';
 import { hav, px, py, simplifyDP, pointInRing, distToSegment, polyLength } from '../../src/core/geo.js';
 
 const [, , FILE, OUT = 'public/data'] = process.argv;
@@ -467,7 +467,7 @@ const stats = {
   totalGz: sizes.reduce((s, x) => s + x.gz, 0) + gzipSync(ij).length,
   /* проверки сети улиц: см. scripts/data/net.mjs */
   net: {
-    components: net.metrics.components, mainShare: Math.round(net.metrics.mainShare * 1000) / 10, otherNamed: net.metrics.otherNamed, deadShort: net.metrics.deadShort, loopsShort: net.metrics.loopsShort,
+    v: NET_VERSION, components: net.metrics.components, mainShare: Math.round(net.metrics.mainShare * 1000) / 10, otherNamed: net.metrics.otherNamed, deadShort: net.metrics.deadShort, loopsShort: net.metrics.loopsShort,
     lostNamed: net.metrics.lostNamed.length, parallel3: Math.round(net.metrics.parallel3 * 1000) / 10, km: net.metrics.km
   }
 };
