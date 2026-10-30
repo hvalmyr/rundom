@@ -10,7 +10,7 @@ import { gzipSync } from 'node:zlib';
 import { dirname } from 'node:path';
 import { readPbf } from './pbf.mjs';
 import { placeInfo } from './wiki-places.mjs';
-import { classifyWay } from '../../src/core/osm.js';
+import { streetWay, buildNetwork } from './net.mjs';
 import { hav, px, py, simplifyDP, pointInRing, distToSegment, polyLength } from '../../src/core/geo.js';
 
 const [, , FILE, OUT = 'public/data'] = process.argv;
@@ -26,7 +26,6 @@ const relWays = new Set();
 const parkRels = [], districtTags = new Map();
 const districts = JSON.parse(readFileSync(new URL('../../src/data/districts.json', import.meta.url)));
 const districtIds = new Set(districts.map((d) => d.id));
-const CARRIER = { trunk: 1, primary: 1, secondary: 1, tertiary: 1 };
 /* вход платный или закрыт: на пробежке туда не попасть */
 const closedEntry = (t) => (t.fee && t.fee !== 'no') || /^(private|no|customers|permit|military|delivery)$/.test(t.access || '');
 const isPark = (t) => t && t.name && (t.leisure === 'park' || t.leisure === 'garden' || t.leisure === 'nature_reserve') && !closedEntry(t);
@@ -62,9 +61,15 @@ const coords = (refs) => {
   for (const r of refs) { const i = findNode(r); if (i >= 0) out.push([nLat[i], nLon[i]]); }
   return out;
 };
+const coordsIds = (refs) => {
+  const pts = [], ids = [];
+  for (const r of refs) { const i = findNode(r); if (i >= 0) { pts.push([nLat[i], nLon[i]]); ids.push(r); } }
+  return { pts, ids };
+};
 const centroid = (pts) => [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
 
-const ways = [];          /* пешеходные пути: {id, name, hw, side, pts} */
+const ways = [];          /* пешеходные пути для сети улиц: streetWay + {ids, pts} */
+const walls = [];         /* контуры зданий: тротуар за домом — не тротуар этой улицы */
 const mkadNodes = [];     /* узлы МКАД для контура */
 const objects = [];       /* {name, cat, p, wiki, tags} */
 const parks = [];         /* {name, rings, wiki} */
@@ -148,15 +153,11 @@ readPbf(FILE, {
       const pts = coords(refs);
       if (pts.length) objects.push({ name: t.name, cat, p: centroid(pts), wiki: t.wikipedia || '', wd: t.wikidata || '', f: factsOf(t) });
     }
-    if (!hw || t.area === 'yes') return;
-    /* ось большой улицы без права прохода (foot=no, trunk): опора для её тротуаров */
-    const carrier = t.name && CARRIER[hw] && t.tunnel !== 'yes' && t.covered !== 'yes' && (hw === 'trunk' || t.foot === 'no' || t.foot === 'use_sidepath');
-    const c = classifyWay(t, {});
-    if (!carrier && (!c || !c.ok)) return;
-    if (c && c.fix) return; /* переходы — не улица */
-    const pts = coords(refs);
-    if (pts.length < 2) return;
-    ways.push({ id, name: t.name || '', hw, carrier: !!carrier, side: t.footway === 'sidewalk' || t.path === 'sidewalk', pts });
+    if (t.building && t.building !== 'no' && !(parseFloat(t.layer) < 0) && refs.length > 3) { walls.push(coords(refs)); return; }
+    const sw = hw && streetWay(t);
+    if (!sw) return;
+    const cw = coordsIds(refs);
+    if (cw.pts.length > 1) ways.push({ ...sw, pts: cw.pts, ids: cw.ids });
   }
 });
 log('проход 2: узлов', nN, 'путей', ways.length, 'объектов', objects.length, 'парков', parks.length, 'узлов МКАД', mkadNodes.length);
@@ -208,6 +209,15 @@ function districtAt(lat, lon) {
   return -1;
 }
 
+/* район рядом с точкой: сама точка, потом кольца 10, 25 и 50 м */
+function districtNear(p) {
+  for (const r of [0, 10, 25, 50]) for (let k = 0; k < (r ? 8 : 1); k++) {
+    const a = k * Math.PI / 4, di = districtAt(p[0] + r * Math.sin(a) / 111195, p[1] + r * Math.cos(a) / (111195 * Math.cos(p[0] * Math.PI / 180)));
+    if (di >= 0) return di;
+  }
+  return -1;
+}
+
 /* ---------- сетка для поиска ближних отрезков ---------- */
 const CELL = 50;
 const gkey = (x, y) => Math.floor(x / CELL) * 100003 + Math.floor(y / CELL);
@@ -244,103 +254,29 @@ function nearest(g, list, x, y, maxD, filter) {
   }
   return best;
 }
-const angDiff = (a, b) => { let d = Math.abs(a - b) % Math.PI; return Math.min(d, Math.PI - d); };
 
-/* ---------- обрезка по МКАД и упрощение ---------- */
-const kept = [];
+/* ---------- сеть улиц (scripts/data/net.mjs) ----------
+   Пути режутся по МКАД (сеть — то, что внутри), дальше — один граф и правила упрощения. */
+const inside = [];
 for (const w of ways) {
-  let run = [];
-  const flush = () => { if (run.length > 1) kept.push({ ...w, pts: simplifyDP(run, 3) }); run = []; };
-  for (const p of w.pts) { if (inMkad(p[0], p[1])) run.push(p); else flush(); }
+  let pts = [], ids = [];
+  const flush = () => { if (pts.length > 1) inside.push({ ...w, pts, ids }); pts = []; ids = []; };
+  w.pts.forEach((p, i) => { if (inMkad(p[0], p[1])) { pts.push(p); ids.push(w.ids[i]); } else flush(); });
   flush();
 }
-for (const w of kept) w.xy = w.pts.flatMap((p) => [px(p[1]), py(p[0])]);
-log('внутри МКАД путей', kept.length, 'км', Math.round(kept.reduce((s, w) => s + polyLength(w.pts), 0) / 1000));
-
-/* ---------- одна улица: тротуары и вторые полосы присоединяются к улице ----------
-   Тротуар (и безымянная дорожка), идущий вдоль улицы ближе 25 м, отбрасывается: его покрывает ось
-   улицы с расширенным допуском. Вторая полоса проспекта с тем же именем ближе 45 м — тоже.
-   Ось без права прохода (foot=no) остаётся только там, где к ней присоединились тротуары. */
-const PATHS = { footway: 1, path: 1, cycleway: 1, pedestrian: 1, steps: 1 };
-const named = kept.map((w, i) => (w.name && !PATHS[w.hw] ? i : -1)).filter((i) => i >= 0);
-const namedList = named.map((i) => kept[i]);
-const ng = segGrid(namedList);
-/* пробы вдоль пути через step м: [x, y, угол] */
-function probesOf(w, step) {
-  const out = [];
-  for (let i = 1; i < w.xy.length / 2; i++) {
-    const x1 = w.xy[2 * i - 2], y1 = w.xy[2 * i - 1], x2 = w.xy[2 * i], y2 = w.xy[2 * i + 1];
-    const L = Math.hypot(x2 - x1, y2 - y1), a = Math.atan2(y2 - y1, x2 - x1);
-    for (let s = Math.min(step / 2, L / 2); s < L; s += step) out.push([x1 + (x2 - x1) * s / L, y1 + (y2 - y1) * s / L, a]);
-  }
-  return out;
+ways.length = 0;
+const net = buildNetwork(inside, { log, walls, green: parks.flatMap((p) => p.rings) });
+walls.length = 0;
+inside.length = 0;
+{
+  const { lostNamed, lostCarrier, shortened, km, others, ...m } = net.metrics;
+  log('отдельные куски сети:', others.join('; '));
+  log('сеть по классам, км:', km, '(A — названные улицы, S — безымянные проезды, W — тротуары, P — дорожки, L — связи с осью)');
+  log('проверки сети:', m);
+  log('потеряно названных улиц', lostNamed.length, lostNamed.slice(0, 30).join('; '));
+  log('названные оси без права прохода и без тротуаров (foot=no, не улицы для пробежки):', lostCarrier.join('; '));
+  if (shortened.length) log('названные улицы короче вдвое (кроме слитых проезжих частей):', shortened.length, shortened.slice(0, 30).join('; '));
 }
-/* самая частая параллельная улица ближе maxD, если вдоль неё ≥70% проб */
-function alongShare(w, maxD, filter) {
-  const votes = new Map(), pr = probesOf(w, 10);
-  for (const [x, y, a] of pr) {
-    const r = nearest(ng, namedList, x, y, maxD, filter);
-    if (r && angDiff(r.ang, a) < 0.45) { const nm = namedList[r.wi].name; votes.set(nm, (votes.get(nm) || 0) + 1); }
-  }
-  let best = null;
-  for (const [nm, c] of votes) if (!best || c > best.c) best = { name: nm, c };
-  return best && pr.length && best.c / pr.length >= 0.7 ? best.name : null;
-}
-let merged = 0, dual = 0;
-for (const w of kept) {
-  if (w.carrier || (w.name && !PATHS[w.hw]) || (w.name && !w.side)) continue;
-  const nm = alongShare(w, 25);
-  if (nm) { w.drop = true; w.to = nm; merged++; }
-}
-/* вторая полоса проспекта */
-const byName = new Map();
-named.forEach((ki, li) => { const nm = kept[ki].name; (byName.get(nm) || byName.set(nm, []).get(nm)).push(li); });
-for (const [nm, lis] of byName) {
-  lis.sort((a, b) => polyLength(namedList[b].pts) - polyLength(namedList[a].pts));
-  const main = new Set();
-  for (const li of lis) {
-    const w = namedList[li];
-    if (main.size && CARRIER[w.hw] && alongShare(w, 45, (wi) => main.has(wi)) === nm) { w.drop = true; w.to = nm; dual++; continue; }
-    main.add(li);
-  }
-}
-/* ось без права прохода — только вдоль присоединённых тротуаров */
-const sideGrid = new Map();
-for (const w of kept) if (w.drop && w.to) for (const [x, y] of probesOf(w, 10)) {
-  const k = gkey(x, y); (sideGrid.get(k) || sideGrid.set(k, []).get(k)).push(x, y, w.to);
-}
-const sideNear = (x, y, nm, R) => {
-  const c0 = Math.floor(x / CELL), r0 = Math.floor(y / CELL);
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-    const a = sideGrid.get((c0 + i) * 100003 + (r0 + j)) || [];
-    for (let q = 0; q < a.length; q += 3) if (a[q + 2] === nm && Math.hypot(a[q] - x, a[q + 1] - y) <= R) return true;
-  }
-  return false;
-};
-let carriers = 0;
-for (const w of kept) {
-  if (!w.carrier || w.drop) continue;
-  const pr = probesOf(w, 10);
-  if (pr.filter(([x, y]) => sideNear(x, y, w.name, 45)).length < pr.length * 0.5) w.drop = true; else carriers++;
-}
-/* допуск улицы: 90-й перцентиль расстояния от присоединённых путей до её оси + 10 м, от 20 до 50 м;
-   путь, у которого оси рядом не осталось, возвращается как есть */
-const axis = kept.filter((w) => w.name && !PATHS[w.hw] && !w.drop);
-const ag = segGrid(axis);
-const dists = new Map();
-let back = 0;
-for (const w of kept) {
-  if (!w.drop || !w.to) continue;
-  const ds = probesOf(w, 10).map(([x, y]) => { const r = nearest(ag, axis, x, y, 60, (wi) => axis[wi].name === w.to); return r ? r.d : Infinity; });
-  ds.sort((a, b) => a - b);
-  const p90 = ds[Math.floor(ds.length * 0.9)] ?? Infinity;
-  if (p90 > 40) { w.drop = false; w.name = w.name || ''; back++; continue; }
-  (dists.get(w.to) || dists.set(w.to, []).get(w.to)).push(p90);
-}
-const tolOf = new Map();
-for (const [nm, ds] of dists) tolOf.set(nm, Math.min(50, Math.max(20, Math.round(Math.max(...ds) + 10))));
-log('осей без прохода', carriers, 'возвращено путей', back);
-log('присоединено тротуаров и дорожек', merged, 'вторых полос', dual);
 
 /* ---------- нарезка на участки ~25 м и раскладка по районам ---------- */
 function cut(pts, step) {
@@ -364,16 +300,24 @@ function cut(pts, step) {
 }
 const D = districts.map(() => ({ streets: new Map(), km: 0 }));
 let total = 0;
-for (const w of kept) {
-  if (w.drop) continue;
+for (const w of net.edges) {
   const key = w.name || '';
-  const tol = key ? (tolOf.get(key) || 20) : 20;
+  const tol = key ? (net.tol.get(key) || 20) : 20;
   /* в цепочку идут точки самого пути; точки нарезки нужны только на границах районов */
   let chainD = -2, chain = null, end = null;
   const close = () => { if (chain && chain[chain.length - 1] !== end) chain.push(end); };
-  for (const piece of cut(w.pts, 25)) {
+  const pieces = cut(simplifyDP(w.pts, 3), 25);
+  /* район участка — по его середине; середина в щели между границами районов — район соседнего участка */
+  const dis = pieces.map((piece) => {
     const m = piece[Math.floor(piece.length / 2)], mm = piece.length % 2 ? m : [(piece[piece.length / 2 - 1][0] + m[0]) / 2, (piece[piece.length / 2 - 1][1] + m[1]) / 2];
-    const di = districtAt(mm[0], mm[1]);
+    return districtAt(mm[0], mm[1]);
+  });
+  for (let i = 1; i < dis.length; i++) if (dis[i] < 0) dis[i] = dis[i - 1];
+  for (let i = dis.length - 2; i >= 0; i--) if (dis[i] < 0) dis[i] = dis[i + 1];
+  /* всё ребро в щели: ближайший район вокруг его середины */
+  if (dis[0] < 0) { const di = districtNear(w.pts[Math.floor(w.pts.length / 2)]); dis.fill(di); }
+  for (let pi = 0; pi < pieces.length; pi++) {
+    const piece = pieces[pi], di = dis[pi];
     if (di !== chainD) { close(); chain = null; }
     end = piece[piece.length - 1];
     if (di < 0) { chainD = -2; continue; }
@@ -381,9 +325,9 @@ for (const w of kept) {
     D[di].km += len; total += len;
     if (!chain) {
       const st = D[di].streets;
-      if (!st.has(key)) st.set(key, { n: key, t: tol, chains: [] });
+      if (!st.has(key)) st.set(key, { n: key, t: tol, chains: [], two: [] });
       chain = [piece[0], ...piece.slice(1).filter((p) => !p.cut)];
-      st.get(key).chains.push(chain); chainD = di;
+      st.get(key)[w.two ? 'two' : 'chains'].push(chain); chainD = di;
     } else chain.push(...piece.slice(1).filter((p) => !p.cut));
   }
   close();
@@ -406,7 +350,8 @@ for (const o of objects) {
   if (near) { if (!near.wiki) near.wiki = o.wiki; if (!near.wd) near.wd = o.wd; mergeFacts(near.f, o.f); continue; }
   dedup.push(o); (grid.get(k) || grid.set(k, []).get(k)).push(o);
 }
-const sList = axis.filter((w) => !w.drop), sGrid = segGrid(sList);
+const sList = net.edges.filter((w) => w.name && w.cls === 'A').map((w) => ({ name: w.name, xy: w.pts.flatMap((p) => [px(p[1]), py(p[0])]) }));
+const sGrid = segGrid(sList);
 function streetNear(p) {
   const r = nearest(sGrid, sList, px(p[1]), py(p[0]), 60);
   return r ? sList[r.wi].name : '';
@@ -494,7 +439,11 @@ for (let i = 0; i < districts.length; i++) {
     .map((q) => ({ n: q.name, ha: Math.round(q.area / 1000) / 10, r: q.rings.map((r) => encLine(r, o)), w: info.get(q), f: factsOut(q) }));
   const file = {
     id: d.id, n: d.n, v: version, o,
-    s: streets.map((s) => ({ n: s.n || undefined, t: s.t === 20 ? undefined : s.t, c: joinChains(s.chains).map((c) => encLine(c, o)) })),
+    s: streets.map((s) => {
+      /* b — с какой по счёту линии улица двусторонняя: стороны считаются отдельно */
+      const one = joinChains(s.chains), two = joinChains(s.two);
+      return { n: s.n || undefined, t: s.t === 20 ? undefined : s.t, c: [...one, ...two].map((c) => encLine(c, o)), b: two.length ? one.length : undefined };
+    }),
     ob: objs, pk, about: about || undefined
   };
   if (about) about_n++;
@@ -515,7 +464,12 @@ const stats = {
   version, date: index.date, km: index.km, districts: index.d.length,
   streets: index.d.reduce((s, d) => s + d.st, 0), about: about_n, objects: index.d.reduce((s, d) => s + d.ob, 0), parks: index.d.reduce((s, d) => s + d.pk, 0),
   indexGz: gzipSync(ij).length, maxDistrictGz: Math.max(...sizes.map((s) => s.gz)), minDistrictGz: Math.min(...sizes.map((s) => s.gz)),
-  totalGz: sizes.reduce((s, x) => s + x.gz, 0) + gzipSync(ij).length
+  totalGz: sizes.reduce((s, x) => s + x.gz, 0) + gzipSync(ij).length,
+  /* проверки сети улиц: см. scripts/data/net.mjs */
+  net: {
+    components: net.metrics.components, mainShare: Math.round(net.metrics.mainShare * 1000) / 10, otherNamed: net.metrics.otherNamed, deadShort: net.metrics.deadShort, loopsShort: net.metrics.loopsShort,
+    lostNamed: net.metrics.lostNamed.length, parallel3: Math.round(net.metrics.parallel3 * 1000) / 10, km: net.metrics.km
+  }
 };
 writeFileSync(`${OUT}/stats.json`, JSON.stringify(stats, null, 1));
 log(stats);

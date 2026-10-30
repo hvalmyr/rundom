@@ -15,6 +15,17 @@ check('Индекс', s.indexGz <= 300 * KB, Math.round(s.indexGz / KB) + ' КБ
 /* центральные районы плотнее остальных: бюджет 80 КБ вместо 40 */
 check('Самый крупный район', s.maxDistrictGz <= 80 * KB, Math.round(s.maxDistrictGz / KB) + ' КБ gzip (бюджет 80)');
 check('Самый мелкий район', s.minDistrictGz >= 3 * KB, Math.round(s.minDistrictGz / KB) + ' КБ gzip');
+/* сеть улиц: одна связная компонента (отдельно — только куски с названными улицами), без коротких тупиков и петель,
+   все названные улицы на месте */
+if (s.net) {
+  const n = s.net;
+  /* отдельные куски — за железными дорогами и у МКАД, без связи в OSM ближе 30 м: допустимы, если их доля мала */
+  check('Связность сети', n.mainShare >= 99.5, `в главной компоненте ${n.mainShare}% длины; отдельных кусков ${n.components - 1}, из них с названными улицами ${n.otherNamed}`);
+  check('Тупики короче 50 м', n.deadShort === 0, String(n.deadShort));
+  check('Петли короче 50 м', n.loopsShort === 0, String(n.loopsShort));
+  check('Потеряно названных улиц', n.lostNamed === 0, String(n.lostNamed));
+  check('Три параллельные линии у улицы', n.parallel3 <= 2, n.parallel3 + '% длины названных улиц');
+}
 for (const k of ['km', 'districts', 'streets', 'objects', 'parks']) {
   if (!p) { check(k, true, `${s[k]} (прошлого релиза нет)`); continue; }
   const d = (s[k] - p[k]) / p[k];

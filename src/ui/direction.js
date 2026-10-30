@@ -139,9 +139,6 @@ export function initDirection(app) {
     syncSeg($('#strictSeg'), 'strict', P.distStrict ? '1' : '0');
     syncSeg($('#multiSeg'), 'multi', P.distMulti);
     $('#multiSeg').hidden = P.districts.length < 2;
-    $('#distHint').textContent = P.distStrict
-      ? 'Кольцо целиком в выбранных районах, кроме подводки и пути до района.'
-      : 'Самая дальняя точка — в районе, выходить за его границы можно.';
   }
   $('#distMap').addEventListener('click', () => {
     if (picking()) { app.setMode(null); return; }

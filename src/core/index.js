@@ -9,3 +9,4 @@ export * from './coverage.js';
 export * from './cover.js';
 export * from './naming.js';
 export * from './compact.js';
+export * from './share.js';

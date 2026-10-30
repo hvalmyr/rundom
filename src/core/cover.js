@@ -3,13 +3,18 @@
    прошёл ближе 40 м; парк — если трек заходил внутрь.
    Данные района (public/data/d/<id>.json) — улицы как ломаные в целых дельтах 1e-5°.
    Каждая ломаная режется на участки ~25 м; участок пройден, если трек шёл ближе допуска
-   улицы к 60% его длины (пробы через 5 м). */
+   улицы к 60% его длины (пробы через 5 м).
+   Улица с двусторонним движением считается с двух сторон: пройденная с одной стороны — наполовину.
+   Сторона — по положению трека относительно оси: слева или справа по ходу её линии; трек в пределах
+   SIDE_ZERO метров от оси засчитывается с обеих сторон. Код участка в покрытии трека: номер × 4 + маска
+   (1 — слева, 2 — справа, 3 — целиком). */
 import { hav, px, py, polyLength, pointInRing } from './geo.js';
 
 const Q = 1e5, SEG = 25, PROBE = 5, SHARE = 0.6, OBJ_NEAR = 40, OBJ_STREET = 60;
 const CELL = 50, KEY = 100003;
 /* версия правил расчёта: при её смене покрытие треков пересчитывается */
-const COVER_VERSION = 2;
+const COVER_VERSION = 10;
+const SIDE_ZERO = 1.5; /* м: ближе к оси — трек засчитывается с обеих сторон */
 const ALONG = Math.PI / 4; /* трек засчитывается, если идёт вдоль участка (±45°), а не поперёк */
 
 function decodeLine(c, o) {
@@ -58,10 +63,12 @@ const flatRing = (r) => r.flatMap((p) => [px(p[1]), py(p[0])]);
 
 /* Файл района → структура для расчёта покрытия. */
 function decodeDistrict(f) {
-  const streets = [], segStreet = [], segLen = [], probeStart = [0], probes = [], box = [];
+  const streets = [], segStreet = [], segLen = [], segTwo = [], probeStart = [0], probes = [], box = [];
   for (const s of f.s) {
     const st = { n: s.n || '', t: s.t || 20, from: segLen.length, to: 0, len: 0 };
-    for (const c of s.c) {
+    /* s.b — с какой по счёту линии улица двусторонняя */
+    for (let ci = 0; ci < s.c.length; ci++) {
+      const c = s.c[ci], two = s.b !== undefined && ci >= s.b ? 1 : 0;
       const line = decodeLine(c, f.o);
       if (line.length < 2) continue;
       for (const p of pieces(line)) {
@@ -72,7 +79,7 @@ function decodeDistrict(f) {
           probes.push(x, y);
           if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
         }
-        segStreet.push(streets.length); segLen.push(len); box.push(x0, y0, x1, y1);
+        segStreet.push(streets.length); segLen.push(len); segTwo.push(two); box.push(x0, y0, x1, y1);
         probeStart.push(probes.length / 2);
         st.len += len;
       }
@@ -105,7 +112,7 @@ function decodeDistrict(f) {
   });
   return {
     id: f.id, n: f.n, v: f.v, about: f.about || null, streets, objects, parks,
-    segStreet: Int32Array.from(segStreet), segLen: Float32Array.from(segLen),
+    segStreet: Int32Array.from(segStreet), segLen: Float32Array.from(segLen), segTwo: Uint8Array.from(segTwo),
     probeStart: Int32Array.from(probeStart), probes: Float64Array.from(probes), box: Float64Array.from(box),
     total: segLen.reduce((s, x) => s + x, 0)
   };
@@ -145,6 +152,25 @@ function near(map, x, y, tol, dir) {
   return false;
 }
 
+/* С каких сторон оси (угол dir) трек в пределах tol: 1 — слева, 2 — справа, 3 — с обеих; 0 — нет. */
+function nearSides(map, x, y, tol, dir) {
+  const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL), R = tol > CELL ? 2 : 1, t2 = tol * tol;
+  const c = Math.cos(dir), sn = Math.sin(dir);
+  let mask = 0;
+  for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) {
+    const a = map.get((cx + i) * KEY + (cy + j));
+    if (!a) continue;
+    for (let q = 0; q < a.length; q += 3) {
+      const dx = a[q] - x, dy = a[q + 1] - y;
+      if (dx * dx + dy * dy > t2 || angDiff(a[q + 2], dir) > ALONG) continue;
+      const lat = c * dy - sn * dx; /* >0 — слева от направления линии */
+      mask |= lat > SIDE_ZERO ? 1 : lat < -SIDE_ZERO ? 2 : 3;
+      if (mask === 3) return 3;
+    }
+  }
+  return mask;
+}
+
 /* Что трек покрыл в районе: номера участков, объектов и парков. */
 function coverTrack(dist, lines, grid) {
   const tg = grid || trackGrid(lines);
@@ -156,14 +182,25 @@ function coverTrack(dist, lines, grid) {
     if (B[4 * s] > tx1 + tol || B[4 * s + 2] < tx0 - tol || B[4 * s + 1] > ty1 + tol || B[4 * s + 3] < ty0 - tol) continue;
     const p0 = dist.probeStart[s], p1 = dist.probeStart[s + 1], need = Math.ceil((p1 - p0) * SHARE);
     const P = dist.probes, dir = Math.atan2(P[2 * p1 - 1] - P[2 * p0 + 1], P[2 * p1 - 2] - P[2 * p0]);
+    if (dist.segTwo[s]) {
+      let l = 0, r = 0;
+      for (let p = p0; p < p1; p++) {
+        const m = nearSides(tg.map, P[2 * p], P[2 * p + 1], tol, dir);
+        if (m & 1) l++;
+        if (m & 2) r++;
+      }
+      const mask = (l >= need ? 1 : 0) | (r >= need ? 2 : 0);
+      if (mask) segs.push(s * 4 + mask);
+      continue;
+    }
     let hit = 0, miss = 0;
     for (let p = p0; p < p1; p++) {
       if (near(tg.map, P[2 * p], P[2 * p + 1], tol, dir)) { if (++hit >= need) break; }
       else if (++miss > p1 - p0 - need) break;
     }
-    if (hit >= need) segs.push(s);
+    if (hit >= need) segs.push(s * 4 + 3);
   }
-  const done = new Set(segs);
+  const done = new Set(segs.map((c) => c >> 2));
   dist.objects.forEach((o, i) => {
     if (o.x < tx0 - OBJ_STREET || o.x > tx1 + OBJ_STREET || o.y < ty0 - OBJ_STREET || o.y > ty1 + OBJ_STREET) return;
     if (o.segs.some((g) => done.has(g)) || near(tg.map, o.x, o.y, OBJ_NEAR)) objs.push(i);
@@ -187,11 +224,22 @@ function districtsTouched(index, lines) {
   return index.d.filter((d) => !(d.b[0] > a1 || d.b[2] < a0 || d.b[1] > b1 || d.b[3] < b0)).map((d) => d.id);
 }
 
-/* Покрытие района по набору треков: доля длины и пройденные метры по улицам. */
+/* Коды участков (номер × 4 + маска) одного или нескольких треков → Map: участок → маска сторон. */
+function coveredMap(codes, into) {
+  const map = into || new Map();
+  for (const c of codes) map.set(c >> 2, (map.get(c >> 2) || 0) | (c & 3));
+  return map;
+}
+
+/* Покрытие района по набору треков: доля длины и пройденные метры по улицам.
+   covered — Map: участок → маска сторон (1, 2 или 3). У двусторонней улицы каждая сторона — половина участка. */
 function districtStats(dist, covered) {
   let done = 0;
   const byStreet = new Float64Array(dist.streets.length);
-  for (const s of covered) { done += dist.segLen[s]; byStreet[dist.segStreet[s]] += dist.segLen[s]; }
+  for (const [s, mask] of covered) {
+    const part = dist.segTwo[s] ? ((mask & 1) + ((mask >> 1) & 1)) / 2 : 1, m = dist.segLen[s] * part;
+    done += m; byStreet[dist.segStreet[s]] += m;
+  }
   return { done, total: dist.total, share: dist.total ? done / dist.total : 0, byStreet };
 }
 
@@ -202,4 +250,4 @@ function decodeRing(flat) {
   return pts;
 }
 
-export { COVER_VERSION, decodeDistrict, trackGrid, coverTrack, districtsTouched, districtStats, decodeRing };
+export { COVER_VERSION, decodeDistrict, trackGrid, coverTrack, districtsTouched, districtStats, coveredMap, decodeRing };

@@ -293,8 +293,7 @@ function createGenerator(g, o) {
       if (strict) {
         var inner = [];
         zones.forEach(function (i) { inner = inner.concat(o.districts.mode === 'all' || i === curZone ? zonePools[i] : []); });
-        for (var q = 0; q < k; q++) vias.push(pick(inner));
-        return order(vias);
+        return sweepVias(vias, inner);
       }
     }
     var side = rng() < 0.5 ? 1 : -1;
@@ -304,6 +303,29 @@ function createGenerator(g, o) {
       if (cand !== A && cand !== B) vias.push(cand);
     }
     return order(vias);
+  }
+
+  /* «Строго внутри района»: кольцо длиной L в тесном районе не складывается из двух-трёх опорных точек.
+     Точки берутся цепочкой по району — каждая следующая недалеко от прошлой и вдали от уже взятых, —
+     пока прямая длина цепочки (с поправкой c на изгибы улиц) не достигнет нужной длины. */
+  function sweepVias(vias, inner) {
+    var want = Lr / c * (0.92 + rng() * 0.16), len = 0, last = A, chain = vias.slice();
+    chain.forEach(function (v) { len += dist(last, v); last = v; });
+    var taken = chain.slice(), guard = 0;
+    while (len + dist(last, B) < want && guard++ < 60) {
+      var best = -1, bs = -Infinity;
+      for (var t = 0; t < 6; t++) {
+        var cand = pick(inner), near = Infinity;
+        for (var j = 0; j < taken.length; j++) near = Math.min(near, dist(cand, taken[j]));
+        var step = dist(cand, last);
+        /* и не рядом с уже взятыми, и не слишком далеко от последней точки */
+        var sc = Math.min(near, 250) - step * 0.35;
+        if (sc > bs) { bs = sc; best = cand; }
+      }
+      if (best < 0 || best === A || best === B) continue;
+      len += dist(last, best); last = best; taken.push(best); chain.push(best);
+    }
+    return chain;
   }
 
   function estimate(seq) {
@@ -333,6 +355,11 @@ function createGenerator(g, o) {
   function consider(seq) {
     var r = buildRoute(seq);
     if (!r || !r.edges.length) return;
+    finish(r, seq, false);
+  }
+
+  /* r — найденное кольцо {nodes, edges}; sweep — оно обходит улицы района: повторы на переходах между ними неизбежны */
+  function finish(r, seq, sweep, cover) {
     var ring = 0, overlap = 0;
     seen.fill(0);
     for (var i = 0; i < r.edges.length; i++) {
@@ -363,10 +390,12 @@ function createGenerator(g, o) {
     var mask = new Uint8Array(g.E);
     for (var k = 0; k < edges.length; k++) mask[edges[k]] = 1;
     cand.mask = mask;
-    var clean = noRepeat ? overlap <= Math.max(60, 0.015 * ring) : ov <= 0.2;
+    if (sweep) cand.sweepCover = cover;
+    /* в тесном районе длинная пробежка неизбежно повторяет улицы: если повторы разрешены, допускаем больше */
+    var clean = sweep ? ov <= 0.6 : noRepeat ? overlap <= Math.max(60, 0.015 * ring) : ov <= (strict ? 0.5 : 0.2);
     if (!dirOk) { cand.dirOut = r.dirOut; if (err <= tol && clean) dirFallback.push(cand); return; }
     if (err <= tol && clean) accepted.push(cand);
-    else if (err <= 0.35 && ov <= (noRepeat ? 0.1 : 0.3)) fallback.push(cand);
+    else if (err <= 0.35 && ov <= (sweep ? 0.7 : noRepeat ? 0.1 : strict ? 0.6 : 0.3)) fallback.push(cand);
   }
 
   /* Дальняя от старта кольца точка в нужном секторе или районе; для «строго» — кольцо внутри районов. */
@@ -413,6 +442,125 @@ function createGenerator(g, o) {
     return uni > 0 ? shared / uni : 1;
   }
 
+  /* ---------- обход района ----------
+     «Строго внутри района»: кольцо идёт по улицам района, как можно больше новых, пока не наберёт длину.
+     Каждый шаг — ближайшая ещё не пройденная улица района (поиск Дейкстры от текущего места),
+     затем путь домой. Пройденные ранее пробежками улицы берутся в последнюю очередь. */
+  var sweepHeap = null;
+  function sweepWalk() {
+    ensureTwins(g);
+    var n = g.n, E = g.E, bl = g.eBlock, ex = g.eExpl;
+    var base = strictCost || dirCost || cost;
+    /* небольшой шум в стоимости — каждый заход идёт по-своему */
+    var noise = new Float64Array(E);
+    for (var ne = 0; ne < E; ne++) noise[ne] = base[ne] * (1 + rng() * 0.35);
+    var cov = new Uint8Array(E);
+    function covered(e) { return cov[e] === 1; }
+    function cover(e) { cov[e] = 1; for (var k = g.twinStart[e]; k < g.twinStart[e + 1]; k++) cov[g.twinEdge[k]] = 1; }
+    function inside(e) {
+      var a = inZone[g.eF[e]], b = inZone[g.eT[e]];
+      return o.districts.mode === 'all' ? a >= 0 && b >= 0 : a === curZone && b === curZone;
+    }
+    function target(e) { return !(bl && bl[e]) && inside(e); }
+    var nodes = [A], edges = [], len = 0, cur = A, prevAng = null;
+    var gd = new Float64Array(n), st = new Uint32Array(n), pe = new Int32Array(n), stamp = 0;
+    var hn = [], hk = [];
+    function hpush(v, k) {
+      var i = hn.length; hn.push(v); hk.push(k);
+      while (i > 0) { var p = (i - 1) >> 1; if (hk[p] <= k) break; hn[i] = hn[p]; hk[i] = hk[p]; i = p; }
+      hn[i] = v; hk[i] = k;
+    }
+    function hpop() {
+      var top = hn[0], v = hn.pop(), k = hk.pop();
+      if (hn.length) {
+        var i = 0;
+        for (;;) {
+          var l = 2 * i + 1; if (l >= hn.length) break;
+          var r = l + 1 < hn.length && hk[l + 1] < hk[l] ? l + 1 : l;
+          if (hk[r] >= k) break;
+          hn[i] = hn[r]; hk[i] = hk[r]; i = r;
+        }
+        hn[i] = v; hk[i] = k;
+      }
+      return top;
+    }
+    /* ближайший узел, у которого есть непройденная улица района; fresh — только не пробегавшиеся раньше */
+    function nearestOpen(src, fresh, cap) {
+      stamp++; hn.length = 0; hk.length = 0;
+      gd[src] = 0; st[src] = stamp; pe[src] = -1; hpush(src, 0);
+      var pops = 0, done = new Set();
+      while (hn.length && pops++ < cap) {
+        var v = hpop();
+        if (done.has(v)) continue;
+        done.add(v);
+        for (var k = g.adjStart[v]; k < g.adjStart[v + 1]; k++) {
+          var e = g.adjEdge[k];
+          if (!covered(e) && target(e) && !(fresh && ex && ex[e])) return { node: v, dist: gd[v] };
+        }
+        for (var k2 = g.adjStart[v]; k2 < g.adjStart[v + 1]; k2++) {
+          var e2 = g.adjEdge[k2];
+          if (bl && bl[e2]) continue;
+          var w = g.eF[e2] === v ? g.eT[e2] : g.eF[e2];
+          var ng = gd[v] + noise[e2];
+          if (st[w] !== stamp || ng < gd[w]) { st[w] = stamp; gd[w] = ng; pe[w] = e2; hpush(w, ng); }
+        }
+      }
+      return null;
+    }
+    function pathTo(src, dst) {
+      var es = [], ns = [dst], v = dst;
+      while (v !== src) { var e = pe[v]; es.push(e); v = g.eF[e] === v ? g.eT[e] : g.eF[e]; ns.push(v); }
+      return { edges: es.reverse(), nodes: ns.reverse() };
+    }
+    function push(es, ns) {
+      for (var i = 0; i < es.length; i++) { edges.push(es[i]); len += g.eLen[es[i]]; }
+      for (var j = 1; j < ns.length; j++) nodes.push(ns[j]);
+    }
+    var marks = [], lim = Lr * (1 + tol * 0.8), steps = 0, resets = 0, fresh = new Uint8Array(E), gain = 0;
+    while (steps++ < 4000) {
+      var hit = nearestOpen(cur, true, 6000) || nearestOpen(cur, false, 20000);
+      if (!hit) { if (++resets > 3) break; cov.fill(0); continue; }
+      var pre = pathTo(cur, hit.node);
+      var here = hit.node, bestE = -1, bs = -Infinity;
+      for (var k = g.adjStart[here]; k < g.adjStart[here + 1]; k++) {
+        var e = g.adjEdge[k];
+        if (covered(e) || !target(e)) continue;
+        var w = g.eF[e] === here ? g.eT[e] : g.eF[e];
+        var ang = Math.atan2(Y[w] - Y[here], X[w] - X[here]);
+        var turn = prevAng === null ? 0 : Math.cos(ang - prevAng);
+        var sc = turn + rng() * 0.4 - (ex && ex[e] ? 1 : 0);
+        if (sc > bs) { bs = sc; bestE = e; }
+      }
+      var nxt = g.eF[bestE] === here ? g.eT[bestE] : g.eF[bestE];
+      var add = 0;
+      for (var q = 0; q < pre.edges.length; q++) add += g.eLen[pre.edges[q]];
+      add += g.eLen[bestE];
+      if (len + add + dist(nxt, B) * Math.max(1.15, c) > lim) break;
+      marks.push({ n: nodes.length, e: edges.length, len: len, node: cur, cov: gain });
+      push(pre.edges, pre.nodes);
+      push([bestE], [here, nxt]);
+      /* в зачёт идёт каждая улица один раз: повторный заход после полного обхода района ничего не добавляет */
+      if (!fresh[bestE]) { gain += g.eLen[bestE]; fresh[bestE] = 1; for (var tk = g.twinStart[bestE]; tk < g.twinStart[bestE + 1]; tk++) fresh[g.twinEdge[tk]] = 1; }
+      cover(bestE);
+      prevAng = Math.atan2(Y[nxt] - Y[here], X[nxt] - X[here]);
+      cur = nxt;
+    }
+    if (!edges.length) return null;
+    var homeCost = strictCost || dirCost || cost, home = null;
+    /* путь домой бывает длиннее, чем казалось: если кольцо вышло за допуск, последние шаги обхода снимаются */
+    for (var back = 0; back < 80; back++) {
+      home = router.route(homeCost, cur, B, null, 1);
+      if (!home) return null;
+      var hl = 0;
+      for (var hi = 0; hi < home.edges.length; hi++) hl += g.eLen[home.edges[hi]];
+      if (len + hl <= Lr * (1 + tol) || !marks.length) break;
+      var mk = marks.pop();
+      nodes.length = mk.n; edges.length = mk.e; len = mk.len; cur = mk.node; gain = mk.cov;
+    }
+    push(home.edges, home.nodes);
+    return { nodes: nodes, edges: edges, cover: gain };
+  }
+
   /* A≠B: прямой кратчайший путь тоже кандидат */
   var directTried = false;
 
@@ -429,6 +577,15 @@ function createGenerator(g, o) {
       if (!forced.length && A !== B) { consider([A, B]); return; }
     }
     if (!chooseStart()) { rejects++; return; }
+    if (strict) {
+      if (o.districts.mode !== 'all') curZone = pick(zones);
+      var sw = sweepWalk();
+      if (sw && sw.edges.length) {
+        /* дальняя точка и «не выходит из районов» проверяет directionOk, как у любого кольца */
+        finish(sw, [A, sw.nodes[(sw.nodes.length / 2) | 0], B], true, sw.cover);
+      } else rejects++;
+      return;
+    }
     var seq = null, tries = 0;
     while (tries++ < 40) {
       var vias = makeVias();
@@ -447,7 +604,7 @@ function createGenerator(g, o) {
     while (!state.done && Date.now() - t0 < ms) {
       step();
       if (attempts >= maxAttempts) state.done = true;
-      else if (accepted.length >= (o.count || 3) * 5 && attempts >= 40) state.done = true;
+      else if (accepted.length >= (o.count || 3) * 5 && attempts >= (strict ? 100 : 40)) state.done = true;
     }
     return state.done;
   }
@@ -496,6 +653,8 @@ function createGenerator(g, o) {
       /* почти такой же, как уже показанный, — после всех новых */
       var sa = a.seen > 0.7 ? 1 : 0, sb = b.seen > 0.7 ? 1 : 0;
       if (sa !== sb) return sa - sb;
+      /* обход района: лучший — тот, что покрывает больше новых улиц */
+      if (a.sweepCover !== undefined && b.sweepCover !== undefined && a.sweepCover !== b.sweepCover) return b.sweepCover - a.sweepCover;
       return b.score - a.score;
     });
     var picked = [];

@@ -46,8 +46,13 @@ svg { flex: none; }
   background: none; border: 0; padding: 0 2px; cursor: pointer; color: var(--ink-muted); font-weight: 500;
   box-shadow: inset 0 -2px transparent;
 }
+.tabs button { transition: color .15s, box-shadow .2s ease; border-radius: 0; -webkit-tap-highlight-color: transparent; }
+.tabs button, .tabs button:focus, .tabs button:focus-visible, .tabs button:active { outline: 0 none; outline-offset: 0; border: 0; }
 .tabs button:hover { color: var(--ink); }
 .tabs button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -2px var(--action); }
+/* фокус с клавиатуры: кольцо обрезалось шапкой и оставляло полосы по бокам — вместо него бледная черта снизу, как у выбранной вкладки */
+.tabs button:focus-visible { outline: none; color: var(--ink); box-shadow: inset 0 -2px color-mix(in srgb, var(--action) 40%, transparent); }
+.tabs button[aria-selected="true"]:focus-visible { box-shadow: inset 0 -2px var(--action); }
 
 /* ---------- панель ---------- */
 /* место под полосу прокрутки занято всегда: когда открытый список удлиняет панель, содержимое не прыгает влево */
@@ -338,6 +343,10 @@ h2.sec .count:not(:empty) { margin-left: 4px; color: var(--ink-muted); font-weig
 }
 .mk-gate { width: 3px; height: 11px; margin: 0 auto; background: var(--map-gate-osm); border-radius: 1px; }
 .mk-draft { width: 10px; height: 10px; border-radius: 50%; background: var(--map-explored); border: 2px solid var(--paper); }
+/* точки своего маршрута: с номером, их можно двигать */
+.mk-pt { width: 22px; height: 22px; border-radius: 50%; box-sizing: border-box; background: var(--map-explored); border: 2px solid var(--paper); cursor: grab;
+  display: grid; place-items: center; color: var(--paper); font: 600 11px/1 var(--font-sans); box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 35%, transparent); }
+.mk-pt:active { cursor: grabbing; }
 
 .leaflet-container { font: 13px/18px var(--font-sans); background: var(--surface-sunk); }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--ink); border-radius: var(--radius-md); box-shadow: var(--shadow-float); }
@@ -359,7 +368,7 @@ dialog.settings {
   border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); color: var(--ink);
   box-shadow: var(--shadow-float); padding: 0; width: min(440px, calc(100% - 32px)); max-height: calc(100dvh - 48px);
 }
-dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
+dialog.settings::backdrop { background: color-mix(in srgb, var(--ink) 35%, transparent); }
 .settings-body { padding: var(--space-4) var(--space-6) var(--space-6); display: flex; flex-direction: column; gap: var(--space-6); }
 .settings-head { display: flex; align-items: center; justify-content: space-between; }
 .settings-head h2 { margin: 0; font: 600 20px/26px var(--font-display); letter-spacing: -0.01em; }
@@ -483,12 +492,12 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .ps-pills { display: contents; }
 .pill {
   display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 2px 0 11px; border-radius: var(--radius-pill);
-  background: var(--carmine); color: #fff; font-size: 13px; font-weight: 500; line-height: 18px;
+  background: var(--carmine); color: var(--on-carmine); font-size: 13px; font-weight: 500; line-height: 18px;
 }
 .pill button { all: unset; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; }
 .pill button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
-.pill button:hover { background: rgb(255 255 255 / .22); }
-.pill button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+.pill button:hover { background: color-mix(in srgb, var(--on-carmine) 22%, transparent); }
+.pill button:focus-visible { outline: 2px solid var(--on-carmine); outline-offset: -2px; }
 .ps-box input[type="text"] { flex: 1 1 90px; min-width: 90px; height: 28px; border: 0; padding: 0 6px; background: none; box-shadow: none; }
 .ps-box input[type="text"]:focus { outline: none; }
 .ps-map {
@@ -518,8 +527,8 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .chip.cat { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 10px; transition: background .15s, border-color .15s, color .15s; }
 .chip.cat .ic svg { display: block; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .chip.cat .n { font-size: 12px; color: var(--ink-muted); font-weight: 400; }
-.chip.cat[aria-pressed="true"] { background: var(--carmine); border-color: var(--carmine); color: #fff; }
-.chip.cat[aria-pressed="true"] .n { color: rgb(255 255 255 / .8); }
+.chip.cat[aria-pressed="true"] { background: var(--carmine); border-color: var(--carmine); color: var(--on-carmine); }
+.chip.cat[aria-pressed="true"] .n { color: color-mix(in srgb, var(--on-carmine) 80%, transparent); }
 .chip.cat[aria-pressed="true"]:hover { background: var(--carmine-strong); border-color: var(--carmine-strong); }
 
 .leaflet-pane path.district { stroke: var(--ink-muted); stroke-opacity: .7; stroke-width: 1.1; fill: var(--ink); fill-opacity: 0; transition: fill-opacity .18s, stroke .18s, stroke-width .18s; }
@@ -565,21 +574,8 @@ dialog.settings::backdrop { background: rgba(10, 10, 10, .35); }
 .lg-ln.off { border-top: 1px solid var(--ink-muted); opacity: .6; }
 .lg-ln.on { border-top: 2.5px solid var(--ink); }
 .lg-fill { flex: none; width: 16px; height: 10px; border-radius: 2px; border: 1px solid var(--carmine); background: linear-gradient(90deg, color-mix(in srgb, var(--carmine) 8%, transparent), color-mix(in srgb, var(--carmine) 62%, transparent)); }
-.leaflet-pane path.cov-mask { fill: var(--paper); fill-opacity: .9; stroke: none; }
-.leaflet-pane path.cov-mute { fill: var(--paper); fill-opacity: .72; stroke: none; }
-.leaflet-pane path.cov-dim { fill: var(--paper); fill-opacity: .6; stroke: none; }
-.leaflet-pane path.cov-mkad { fill: none; stroke: var(--ink); stroke-width: 1.6; opacity: .7; }
-.leaflet-pane path.cov-d { fill: var(--carmine); fill-opacity: 0; stroke: var(--carmine); stroke-opacity: .55; stroke-width: 1.2; cursor: pointer;
-  transition: fill-opacity .2s, stroke-opacity .2s; }
-.leaflet-pane path.cov-d.empty { stroke: var(--ink-muted); stroke-opacity: .5; }
-.leaflet-pane path.cov-d:hover { stroke-opacity: 1; stroke-width: 1.8; }
-.leaflet-pane path.cov-d.sel { stroke: var(--carmine-strong); stroke-opacity: 1; stroke-width: 2.6; }
-/* выбран район — остальные бледнеют, но остаются нажимаемыми */
-.leaflet-pane path.cov-d.dim { fill-opacity: calc(var(--cv, 0) * .3); stroke-opacity: .2; }
-.leaflet-pane path.cov-d.dim:hover { stroke-opacity: 1; stroke-width: 1.8; fill-opacity: max(.06, var(--cv, 0)); }
 .cv0 { --cv: .05; } .cv1 { --cv: .1; } .cv2 { --cv: .15; } .cv3 { --cv: .2; } .cv4 { --cv: .26; }
 .cv5 { --cv: .32; } .cv6 { --cv: .39; } .cv7 { --cv: .46; } .cv8 { --cv: .54; } .cv9 { --cv: .62; }
-.leaflet-pane path.cov-d[class*=" cv"]:not(.dim) { fill-opacity: var(--cv); }
 .leaflet-pane path.cov-park { fill: var(--petrol); fill-opacity: .08; stroke: var(--petrol); stroke-width: 1.2; stroke-dasharray: 4 3; }
 .leaflet-pane path.cov-park.st0 { fill-opacity: 0; stroke: var(--ink-muted); }
 .leaflet-pane path.cov-park.st2 { stroke: var(--carmine); }
@@ -637,9 +633,9 @@ button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17p
 .lv5 { --lv: .18; } .lv6 { --lv: .21; } .lv7 { --lv: .24; } .lv8 { --lv: .28; } .lv9 { --lv: .32; }
 
 .dpanel {
-  position: absolute; top: 12px; right: 12px; bottom: 12px; z-index: 550; width: min(360px, calc(100% - 24px)); overflow-y: auto; scrollbar-gutter: stable;
+  position: absolute; top: 12px; right: 12px; bottom: 12px; z-index: 550; width: min(360px, calc(100% - 24px)); overflow-y: auto; scrollbar-width: thin; scrollbar-gutter: stable both-edges;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-float);
-  padding: var(--space-3) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-3) 8px var(--space-4); display: flex; flex-direction: column; gap: var(--space-2);
 }
 .dpanel[hidden] { display: none; }
 #dpanelSlot:empty { display: none; }
@@ -662,14 +658,14 @@ button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17p
 /* значки мест на карте: спокойные, подсвечено только место в фокусе */
 .mk-place { width: 22px; height: 22px; box-sizing: border-box; border-radius: 50%; display: grid; place-items: center;
   background: var(--surface); border: 1px solid var(--line); color: var(--ink-muted); opacity: .92;
-  box-shadow: 0 1px 2px rgb(0 0 0 / .15); transition: transform .15s, background .15s, color .15s; }
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 15%, transparent); transition: transform .15s, background .15s, color .15s; }
 .mk-place svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 /* не исследованное место почти не видно: меньше, бледнее, без тени — до наведения */
 .mk-place.st0 { transform: scale(.82); opacity: .8; box-shadow: none; border-color: var(--line-strong); color: var(--ink-muted); }
 .mk-place.st1 { color: var(--petrol); border-color: color-mix(in srgb, var(--petrol) 40%, var(--line)); }
-.mk-place.st2 { background: var(--carmine); border-color: var(--carmine); color: #fff; opacity: 1; }
+.mk-place.st2 { background: var(--carmine); border-color: var(--carmine); color: var(--on-carmine); opacity: 1; }
 .mk-place.via { background: var(--petrol); border-color: var(--petrol); color: var(--surface); opacity: 1; }
-.mk-place.on, .mk-place:hover { background: var(--carmine); border-color: var(--carmine); color: #fff; opacity: 1; transform: scale(1.25); }
+.mk-place.on, .mk-place:hover { background: var(--carmine); border-color: var(--carmine); color: var(--on-carmine); opacity: 1; transform: scale(1.25); }
 .mk-place.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--carmine) 30%, transparent); }
 
 /* карточка места: фото с автором и лицензией, описание из Википедии */
@@ -784,3 +780,91 @@ button.ccard[aria-expanded="true"]::after { transform: rotate(-135deg); top: 17p
   text-decoration: underline; text-decoration-color: var(--carmine); text-decoration-thickness: 1.5px; text-underline-offset: 3px; transition: color .15s; }
 .about-place a.ext::after { content: ' ↗'; color: var(--carmine); }
 .about-place a.ext:hover { color: var(--carmine); }
+
+/* пробежки, выбранные нажатием на карту */
+.picked-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 6px 10px; border-radius: var(--radius-sm);
+  background: var(--petrol-tint); font-size: 13px; line-height: 18px; }
+
+/* панель района — колонка с прокруткой: линия прогресса и остальное не сжимаются под высоту панели */
+.dpanel > * { flex-shrink: 0; }
+.bar { flex: none; min-height: 5px; }
+.dp-prog { display: flex; flex-direction: column; gap: 4px; }
+.dp-prog .bar { height: 6px; }
+
+/* вкладка «Маршрут»: подбор и свой маршрут — две колонки полей в одном ритме */
+#autoBox, #customBox { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+#autoBox[hidden], #customBox[hidden] { display: none; }
+#autoBox > .btn, #customBox > .btn { width: 100%; }
+
+/* показ пробега */
+.mk-runner { position: relative; width: 18px; height: 18px; border-radius: 50%; background: var(--carmine); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--carmine); }
+.mk-runner .km { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); white-space: nowrap; padding: 1px 7px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--carmine); color: var(--carmine-strong); font: 600 11px/16px var(--font-sans); font-variant-numeric: tabular-nums; }
+.iconbtn.playing { color: var(--carmine); }
+
+/* подсказка над районом на вкладке «Прогресс»: за указателем, поверх карты */
+.dtip.float { position: absolute; z-index: 700; pointer-events: none; transform: translate(-50%, -100%); white-space: nowrap;
+  background: var(--ink); color: var(--paper); font: 500 12px var(--font-sans); padding: 3px 8px; border-radius: 6px; }
+.dtip.float[hidden] { display: none; }
+
+/* кнопки масштаба: плавный наведение и нажатие */
+.leaflet-bar a { transition: background-color .15s, color .15s, transform .1s; }
+.leaflet-bar a:not(.leaflet-disabled):hover { background: var(--surface-sunk) !important; color: var(--carmine) !important; }
+.leaflet-bar a:not(.leaflet-disabled):active { transform: scale(.88); background: var(--line) !important; }
+@media (prefers-reduced-motion: reduce) { .leaflet-bar a { transition: none; } }
+/* значки мест и парки вкладки «Прогресс» гаснут при смене масштаба */
+.leaflet-covMarks-pane, .leaflet-covTop-pane { transition: opacity .18s ease-out; }
+#map.zooming .leaflet-covMarks-pane, #map.zooming .leaflet-covTop-pane { opacity: 0; transition-duration: .06s; }
+
+.runbox { display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* плеер показа пробега */
+.replaybar { position: absolute; z-index: 700; top: 12px; left: 50%; transform: translateX(-50%); width: min(420px, calc(100% - 170px));
+  display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 4px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-pill); box-shadow: var(--shadow-float); }
+.rp-btn { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--action); color: var(--on-action); cursor: pointer; padding: 0;
+  transition: transform .1s, background-color .15s; }
+.rp-btn:active { transform: scale(.9); }
+.rp-btn svg { width: 16px; height: 16px; fill: currentColor; stroke: currentColor; stroke-width: 2.5; stroke-linejoin: round; }
+.rp-btn.rp-close { background: transparent; color: var(--ink-muted); }
+.rp-btn.rp-close:hover { color: var(--ink); background: var(--surface-sunk); }
+.rp-btn.rp-close svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.rp-range { --rp-fill: 0%; flex: 1; min-width: 40px; height: 20px; margin: 0; background: transparent; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.rp-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--carmine) var(--rp-fill), var(--surface-sunk) var(--rp-fill)); }
+.rp-range::-moz-range-track { height: 4px; border-radius: 2px; background: var(--surface-sunk); }
+.rp-range::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--carmine); }
+.rp-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; box-sizing: border-box; background: var(--surface); border: 3px solid var(--carmine); }
+.rp-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; background: var(--surface); border: 3px solid var(--carmine); }
+.rp-range:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+.rp-time { flex: none; font: 500 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-muted); white-space: nowrap; }
+@media (max-width: 860px) { .replaybar { width: calc(100% - 130px); left: calc(50% + 24px); } .rp-time { display: none; } }
+
+/* свой маршрут: точки ставятся нажатием, линию можно схватить */
+#map.adding, #map.adding .leaflet-grab { cursor: crosshair; }
+#map.on-line, #map.on-line .leaflet-grab, #map.on-line .leaflet-interactive { cursor: grab; }
+#map.rerouting, #map.rerouting .leaflet-grab, #map.rerouting * { cursor: grabbing !important; }
+/* кольцо под курсором на линии: появляется и пульсирует — линия «в фокусе», нажатие точку не поставит */
+.mk-grip { width: 30px; height: 30px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--carmine);
+  background: color-mix(in srgb, var(--carmine) 14%, transparent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--carmine) 45%, transparent);
+  animation: grip-in .16s ease-out, grip-pulse 1.4s ease-out .16s infinite; }
+@keyframes grip-in { from { transform: scale(.4); opacity: 0; } }
+@keyframes grip-pulse { 70% { box-shadow: 0 0 0 11px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .mk-grip { animation: grip-in .01s; } }
+
+/* вкладка «Помощь» в настройках */
+.settings-pane { display: flex; flex-direction: column; gap: var(--space-6); }
+.settings-pane[hidden] { display: none; }
+.settings-pane.help section { display: flex; flex-direction: column; gap: var(--space-2); }
+.settings-pane.help h3 { margin: 0; font: 600 15px/22px var(--font-display); }
+.settings-pane.help p { margin: 0; font-size: 13.5px; line-height: 20px; color: var(--ink-muted); }
+.settings-pane.help b { color: var(--ink); font-weight: 600; }
+.custom-head { display: flex; align-items: center; justify-content: space-between; }
+
+/* поле удаления точки: показывается только пока точку тянут на телефоне */
+.trashzone { position: absolute; z-index: 705; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
+  width: min(180px, calc(100% - 140px)); height: 56px; justify-content: center; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 55%, transparent); border: 1.5px dashed var(--carmine); color: var(--carmine);
+  backdrop-filter: blur(3px); box-shadow: none; font: 500 13px/18px var(--font-sans); pointer-events: none; animation: trash-in .16s ease-out; transition: background-color .12s, color .12s, transform .12s; }
+.trashzone[hidden] { display: none; }
+.trashzone svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.trashzone.over { background: color-mix(in srgb, var(--carmine) 80%, transparent); color: #fff; border-style: solid; transform: translateX(-50%) scale(1.06); }
+@keyframes trash-in { from { opacity: 0; transform: translateX(-50%) translateY(-8px); } }

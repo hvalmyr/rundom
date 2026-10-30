@@ -1,4 +1,4 @@
-/* Настройки: тема, обозначения и резервная копия. */
+/* Настройки: тема, обозначения и резервная копия; рядом вкладка «Помощь». */
 import { store, save, BACKUP_APP } from '../storage/store.js';
 import { $, el, toast, download, syncSeg } from './dom.js';
 
@@ -24,7 +24,13 @@ const PLACES = ['home', 'exits', 'ringStart', 'blocks', 'zones', 'openGates', 'v
 
 export function initSettings(app) {
   const dlg = $('#settings');
-  $('#settingsBtn').addEventListener('click', () => dlg.showModal());
+  /* два раздела: настройки и помощь */
+  function showTab(t) {
+    syncSeg($('#settingsTabs'), 'st', t);
+    $('#settingsMain').hidden = t !== 'main'; $('#settingsHelp').hidden = t !== 'help';
+  }
+  $('#settingsTabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) showTab(b.dataset.st); });
+  $('#settingsBtn').addEventListener('click', () => { showTab('main'); dlg.showModal(); });
 
   function applyTheme() {
     const t = store.theme;

@@ -22,7 +22,12 @@ function classifyWay(t, o) {
   var hw = t.highway;
   if (!hw) return null;
   if (!(PATHLIKE[hw] || STREET[hw] || ROADS[hw] || MAIN[hw] || hw === 'steps')) return null;
-  if (t.indoor === 'yes' || t.indoor === 'room' || t.indoor === 'corridor') return null;
+  if (t.indoor === 'yes' || t.indoor === 'room' || t.indoor === 'corridor') {
+    /* Подземные переходы в OSM часто помечены indoor=yes: берутся ходы с tunnel=yes и лестницы, выходящие на уровень земли
+       (level содержит 0). Залы метро и коридоры внутри зданий остаются закрытыми. */
+    var under = t.indoor === 'yes' && (t.tunnel === 'yes' || (hw === 'steps' && /(^|;)0(;|$)/.test(t.level || '')));
+    if (!under) return null;
+  }
   if (t.service === 'parking_aisle' || t.service === 'drive-through') return null;
   var footYes = isFootYes(t);
   if (t.foot === 'no' || t.foot === 'private' || t.foot === 'use_sidepath') return { ok: false, closed: true, why: 'foot' };
@@ -30,7 +35,6 @@ function classifyWay(t, o) {
 
   var cls, pen = 0, appeal = 0, fix = 0;
   if (hw === 'steps') {
-    if (o && o.avoidSteps) return { ok: false, closed: false };
     cls = CLS.steps; appeal = 0.3;
   } else if (PATHLIKE[hw]) {
     cls = CLS.path;

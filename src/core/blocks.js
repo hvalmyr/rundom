@@ -130,14 +130,24 @@ function applyBlocks(g, spec) {
   (spec.segments || []).forEach(function (s) {
     var a = snap(g, s.a, 30), b = snap(g, s.b, 30);
     if (a < 0 || b < 0) return;
-    segmentEdges(g, a, b).forEach(block);
+    var seg = segmentEdges(g, a, b);
+    seg.forEach(block);
+    /* Улица — это ось и её тротуары: закрыть одну ось мало, маршрут пойдёт по тротуару рядом. Параллельные рёбра закрываются тоже. */
+    if (seg.length) {
+      ensureTwins(g);
+      seg.forEach(function (e) { for (var k = g.twinStart[e]; k < g.twinStart[e + 1]; k++) block(g.twinEdge[k]); });
+    }
   });
   var tests = (spec.zones || []).map(zoneTest);
   if (tests.length) {
     for (var e = 0; e < g.E; e++) {
       var ax = g.X[g.eF[e]], ay = g.Y[g.eF[e]], bx = g.X[g.eT[e]], by = g.Y[g.eT[e]];
-      for (var i = 0; i < tests.length; i++) {
-        if (tests[i](ax, ay) || tests[i](bx, by) || tests[i]((ax + bx) / 2, (ay + by) / 2)) { block(e); break; }
+      /* длинное ребро может пересекать маленькую зону, не имея внутри ни конца, ни середины: проверяем через каждые ~5 м */
+      var steps = Math.max(2, Math.ceil(Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay)) / 5));
+      outer: for (var i = 0; i < tests.length; i++) {
+        for (var q = 0; q <= steps; q++) {
+          if (tests[i](ax + (bx - ax) * q / steps, ay + (by - ay) * q / steps)) { block(e); break outer; }
+        }
       }
     }
   }

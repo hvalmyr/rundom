@@ -56,10 +56,9 @@ export function initCoverage(app) {
   async function doneIn(list, ids) {
     let sum = 0;
     for (const id of ids) {
-      const dist = await C.district(id), seen = new Set();
-      for (const t of list) for (const s of (t.cov && t.cov.d[id]) || []) {
-        if (!seen.has(s)) { seen.add(s); sum += dist.segLen[s]; }
-      }
+      const dist = await C.district(id), masks = new Map();
+      for (const t of list) Core.coveredMap((t.cov && t.cov.d[id]) || [], masks);
+      for (const [s, m] of masks) sum += dist.segLen[s] * (dist.segTwo[s] ? ((m & 1) + ((m >> 1) & 1)) / 2 : 1);
     }
     return sum;
   }
@@ -86,14 +85,22 @@ export function initCoverage(app) {
       for (const k of t.cov.o) await push(k, false);
     }
     met.sort((a, b) => (b.isNew - a.isNew) || ((b.c === 'park') - (a.c === 'park')));
-    return { gainShare: gain / (C.index.km * 1000), gainKm: gain / 1000, met };
+    return { gainShare: gain / (await C.networkM()), gainKm: gain / 1000, met };
   };
 
-  /* Участки района, пройденные хоть одним треком. */
+  /* Длина всех улиц внутри МКАД, м: считается по файлам районов один раз. */
+  let networkP = null;
+  C.networkM = () => networkP || (networkP = (async () => {
+    let sum = 0;
+    for (const d of C.index.d) { try { sum += (await C.district(d.id)).total; } catch (e) { sum += d.km * 1000; } }
+    return sum;
+  })());
+
+  /* Участки района, пройденные хоть одним треком: участок → маска сторон. */
   C.covered = (id) => {
-    const set = new Set();
-    for (const t of tracks.items) for (const s of (t.cov && t.cov.d[id]) || []) set.add(s);
-    return set;
+    const map = new Map();
+    for (const t of tracks.items) Core.coveredMap((t.cov && t.cov.d[id]) || [], map);
+    return map;
   };
   /* Встреченные объекты и парки: «район:номер» (парки с префиксом p). */
   C.met = () => {
@@ -132,7 +139,7 @@ export function initCoverage(app) {
   C.ready.then((idx) => {
     const box = $('#dataDate');
     box.textContent = idx
-      ? 'Данные OpenStreetMap от ' + fmtDate(idx.date) + ': ' + idx.d.length + ' районов внутри МКАД, ' + Math.round(idx.km).toLocaleString('ru-RU') + ' км улиц и дорожек.'
+      ? 'Данные OpenStreetMap от ' + fmtDate(idx.date) + ': ' + idx.d.length + ' районов внутри МКАД, ' + Math.round(idx.km).toLocaleString('ru-RU') + ' км улиц и дорожек без коротких тупиков.'
       : 'Данные покрытия улиц не загрузились: проценты по МКАД появятся, когда сайт сможет их получить.';
     if (idx) setTimeout(() => refreshAll().catch(() => toast('Не удалось посчитать покрытие улиц.')), 1500);
   });

@@ -31,6 +31,19 @@
 
     <!-- ===== Маршрут ===== -->
     <section class="tabpane" id="pane-route" role="tabpanel" aria-labelledby="tab-route">
+      <div class="seg" id="kindSeg" role="group" aria-label="Как получить маршрут">
+        <button type="button" data-kind="auto">Подбор rundom</button><button type="button" data-kind="custom">Свой маршрут</button>
+      </div>
+
+      <div id="customBox" hidden>
+        <div class="custom-head">
+          <span class="lbl">Точки маршрута</span>
+          <button class="iconbtn" id="customClear" type="button" aria-label="Убрать все точки" title="Убрать все точки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+        </div>
+        <label class="check"><input type="checkbox" id="customLoop"><span>Вернуться к старту</span></label>
+      </div>
+
+      <div id="autoBox">
       <div class="field">
         <span class="lbl" id="startLbl">Старт</span>
         <div class="seg" id="startSeg" role="group" aria-labelledby="startLbl">
@@ -68,7 +81,7 @@
           <div class="sug" id="sugA" hidden></div>
         </div>
 
-        <label class="check"><input type="checkbox" id="loop"><span>Финиш там же<small>Без галочки можно задать отдельный финиш</small></span></label>
+        <label class="check"><input type="checkbox" id="loop"><span>Финиш там же</span></label>
 
         <div class="field" id="fieldB" hidden>
           <label class="lbl" for="qB">Финиш</label>
@@ -125,7 +138,6 @@
         <div class="seg" id="multiSeg" role="group" aria-label="Несколько районов">
           <button type="button" data-multi="one">Любой район</button><button type="button" data-multi="all">Все районы</button>
         </div>
-        <p class="hint" id="distHint"></p>
       </div>
 
       <div class="field">
@@ -168,30 +180,14 @@
             <label for="prefPoi">Интересные места рядом</label><output id="outPoi"></output>
             <input type="range" id="prefPoi" min="0" max="100" step="5">
           </div>
-          <label class="check"><input type="checkbox" id="allowRepeats"><span>Разрешить повторы улиц<small>Без галочки кольцо не проходит одну улицу дважды, считая обе её стороны</small></span></label>
-          <label class="check"><input type="checkbox" id="avoidSteps"><span>Без лестниц</span></label>
-          <label class="check"><input type="checkbox" id="strictGates"><span>Не идти через частные шлагбаумы<small>Обычно шлагбаум перекрывает только машины, а пешеход обходит его сбоку, поэтому маршрут через него идёт. Включите, если во дворах такие шлагбаумы закрыты и для пешеходов</small></span></label>
-          <div class="setting">
-            <label for="kmStep">Метки</label>
-            <label class="unit"><input id="kmStep" class="num" type="number" inputmode="numeric" min="100" max="10000" step="100" autocomplete="off" aria-describedby="kmStepHint"><span>м</span></label>
-          </div>
-          <p class="hint" id="kmStepHint">Через сколько метров ставить метки на карте и в GPX.</p>
-          <div class="setting">
-            <span class="lbl-inline" id="paceLbl">Темп</span>
-            <div class="stepper" role="group" aria-labelledby="paceLbl">
-              <button type="button" class="step" id="paceDown" aria-label="Быстрее на 5 секунд">−</button>
-              <label class="unit"><input id="pace" class="num" type="text" inputmode="numeric" placeholder="6:00" value="6:00" autocomplete="off" aria-labelledby="paceLbl" aria-describedby="paceHint"><span>/км</span></label>
-              <button type="button" class="step" id="paceUp" aria-label="Медленнее на 5 секунд">+</button>
-            </div>
-          </div>
-          <p class="hint" id="paceHint">Минуты и секунды на километр: для времени в карточках.</p>
+          <label class="check"><input type="checkbox" id="allowRepeats"><span>Разрешить повторы улиц</span></label>
+          <label class="check"><input type="checkbox" id="strictGates"><span>Не идти через частные шлагбаумы</span></label>
         </div>
       </details>
 
       <details class="more" id="blocksBox">
         <summary><span>Тупики и зоны <span class="count" id="blocksCount"></span></span></summary>
         <div class="blocks">
-          <p class="hint">Тупик — проход, которого на деле нет: калитка или отрезок улицы. Зона — место, куда маршрут не заходит. Нажмите на отметку на карте, чтобы удалить её.</p>
           <div class="btns">
             <button class="btn small" id="addClosed" type="button">+ Тупик</button>
             <button class="btn small" id="addZone" type="button">+ Зона</button>
@@ -209,8 +205,27 @@
           <path class="b" id="braidB"/>
         </svg>
       </div>
+      </div>
+      <div class="runbox" id="runBox">
+        <span class="lbl">Метки и темп</span>
+        <div class="sliders">
+          <div class="setting">
+            <label for="kmStep">Метки</label>
+            <label class="unit"><input id="kmStep" class="num" type="number" inputmode="numeric" min="100" max="10000" step="100" autocomplete="off"><span>м</span></label>
+          </div>
+          <div class="setting">
+            <span class="lbl-inline" id="paceLbl">Темп</span>
+            <div class="stepper" role="group" aria-labelledby="paceLbl">
+              <button type="button" class="step" id="paceDown" aria-label="Быстрее на 5 секунд">−</button>
+              <label class="unit"><input id="pace" class="num" type="text" inputmode="numeric" placeholder="6:00" value="6:00" autocomplete="off" aria-labelledby="paceLbl"><span>/км</span></label>
+              <button type="button" class="step" id="paceUp" aria-label="Медленнее на 5 секунд">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
       <p class="status" id="status" role="status"></p>
       <div class="results" id="results"></div>
+      <button class="btn primary big" id="customSave" type="button" hidden>Сохранить в библиотеку</button>
     </section>
 
     <!-- ===== Библиотека ===== -->
@@ -294,6 +309,10 @@
 <dialog class="settings" id="settings" aria-labelledby="settingsTitle">
   <form method="dialog" class="settings-body">
     <header class="settings-head"><h2 id="settingsTitle">Настройки</h2><button class="iconbtn ghost" value="close" aria-label="Закрыть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+    <div class="seg" id="settingsTabs" role="group" aria-label="Раздел настроек">
+      <button type="button" data-st="main">Настройки</button><button type="button" data-st="help">Помощь</button>
+    </div>
+    <div class="settings-pane" id="settingsMain">
     <div class="field">
       <span class="lbl">Тема</span>
       <div class="seg" id="themeSeg" role="group" aria-label="Тема">
@@ -306,7 +325,6 @@
     </div>
     <div class="field">
       <span class="lbl">Резервная копия</span>
-      <p class="hint">Всё хранится только в этом браузере. Сохраните копию, чтобы перенести данные на другое устройство.</p>
       <div class="btns">
         <button class="btn" id="exportData" type="button">Скачать копию</button>
         <button class="btn" id="importData" type="button">Загрузить копию</button>
@@ -314,8 +332,7 @@
       </div>
     </div>
     <div class="field">
-      <span class="lbl">Как строятся маршруты</span>
-      <p class="hint">Маршруты считаются прямо в браузере по карте улиц OpenStreetMap, путь между точками ищет алгоритм A*. Закрытые ворота, частные и служебные проезды маршрут обходит.</p>
+      <span class="lbl">Данные карты</span>
       <p class="hint" id="dataDate">Дата данных карты загружается…</p>
     </div>
     <div class="field">
@@ -328,6 +345,52 @@
         <li><strong>Карта в браузере</strong> — <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a> (BSD-2-Clause), <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL JS</a> (BSD-3-Clause), <a href="https://github.com/maplibre/maplibre-gl-leaflet" target="_blank" rel="noopener">MapLibre GL Leaflet</a> (ISC)</li>
         <li><strong>Шрифты</strong> — <a href="https://rsms.me/inter/" target="_blank" rel="noopener">Inter и Inter Tight</a>, лицензия <a href="https://openfontlicense.org" target="_blank" rel="noopener">SIL OFL 1.1</a></li>
       </ul>
+    </div>
+    </div>
+    <div class="settings-pane help" id="settingsHelp" hidden>
+      <section>
+        <h3>Подбор маршрута</h3>
+        <p><b>Старт.</b> «От дома» строит кольцо от отмеченного дома: у дома можно отметить выходы и указать, откуда начинается кольцо, подводка до него не длиннее заданного. «Своя точка» — любая точка на карте или адрес.</p>
+        <p><b>Финиш там же.</b> Без галочки можно задать отдельный финиш.</p>
+        <p><b>Направление.</b> «Компас» держит кольцо в секторе выбранной стороны света, «Районы» ведёт его в выбранные районы. «Строго» — кольцо целиком в районах, кроме подводки и пути до них; «Примерно» — только самая дальняя точка в районе. «Любой район» даёт по варианту на район, «Все районы» проводит кольцо через каждый.</p>
+        <p><b>Дистанция и отклонение.</b> Нажатие на выбранную дистанцию взводит её удаление, повторное — удаляет. Знак отклонения задаёт, в какую сторону может отличаться длина.</p>
+        <p><b>Предпочтения.</b> Большие дороги, тропы и парки, новые или знакомые улицы, интересные места рядом. «Разрешить повторы улиц»: без галочки кольцо не проходит одну улицу дважды, считая обе её стороны. «Не идти через частные шлагбаумы»: обычно шлагбаум перекрывает только машины, а пешеход обходит его сбоку, поэтому маршрут через него идёт; включите, если во дворах такие шлагбаумы закрыты и для пешеходов.</p>
+        <p><b>Тупики и зоны.</b> Тупик — проход, которого на деле нет: калитка или отрезок улицы. Зона — место, куда маршрут не заходит. Нажмите на отметку на карте, чтобы удалить её.</p>
+        <p><b>Метки и темп.</b> Через сколько метров ставить метки на карте и в GPX, и сколько минут и секунд на километр для времени в карточках. Одни и те же для подбора и для своего маршрута.</p>
+        <p><b>Лестницы</b> маршрут берёт редко, только когда это заметно короче. Подземные переходы учитываются.</p>
+      </section>
+      <section>
+        <h3>Свой маршрут</h3>
+        <p>Нажимайте на пустое место карты: точки соединятся по улицам. Точку можно перетащить. Двойной щелчок или правая кнопка мыши убирает её; на телефоне при перетаскивании сверху появляется поле, в которое точку нужно отпустить, чтобы удалить.</p>
+        <p>Если взять линию маршрута и потянуть, между соседними точками появится новая, а маршрут перестроится на ходу. Просто нажатие на линию точку не ставит.</p>
+        <p>«Вернуться к старту» замыкает кольцо. Кнопка с корзиной убирает все точки.</p>
+        <p><b>Клавиши.</b> Backspace или Delete убирает последнюю точку. Ctrl+Z отменяет действие, Ctrl+Shift+Z (или Ctrl+Y) возвращает его.</p>
+        <p>«Сохранить в библиотеку» внизу вкладки кладёт маршрут в избранное с пометкой «свой маршрут».</p>
+      </section>
+      <section>
+        <h3>Варианты и маршрут на карте</h3>
+        <p>Выбранный вариант идёт от бледного старта к насыщенному финишу: на развилках видно, куда дальше. Остальные варианты — серые линии, нажмите на такую, чтобы выбрать её. Звезда — в библиотеку, стрелка вниз — GPX, значок связи — ссылка на маршрут, треугольник — показ того, как проходит путь.</p>
+        <p>Показ пробега: пауза и «сначала», полоса положения, за которую можно потянуть, чтобы перемотать.</p>
+      </section>
+      <section>
+        <h3>Библиотека</h3>
+        <p>Здесь избранные маршруты и пробежки. Кружок слева показывает линию на карте. Нажатие на старую пробежку на карте выбирает её; если под пальцем их несколько, в списке остаются только они. GPX своих пробежек загружаются кнопкой, улицы можно отметить вручную.</p>
+      </section>
+      <section>
+        <h3>Прогресс</h3>
+        <p>Карта покрытия улиц внутри МКАД. Заливка района — доля пройденных улиц. Улицей считается именованный путь или безымянная дорога; тупики короче 50 м, дворовые подводы и обрывки не учитываются, улицы с названиями не удаляются.</p>
+        <p>У дороги больше чем в две полосы две стороны, и каждая считается половиной: пройденная с одной стороны — наполовину. У остальных улиц одна линия. Сторона определяется по положению трека относительно оси улицы.</p>
+        <p>Места на карте: не исследовано, встречено на пробежке, исследовано (отметка вручную).</p>
+      </section>
+      <section>
+        <h3>Масштаб карты</h3>
+        <p>Масштаб ограничен от 11 до 18. Кнопки «+» и «−» и одно деление колеса мыши — полуровня.</p>
+      </section>
+      <section>
+        <h3>Как строятся маршруты</h3>
+        <p>Маршруты считаются прямо в браузере по карте улиц OpenStreetMap, путь между точками ищет алгоритм A*. Закрытые ворота, частные и служебные проезды маршрут обходит.</p>
+        <p>Всё хранится только в этом браузере. Чтобы перенести данные на другое устройство, сохраните резервную копию на вкладке «Настройки».</p>
+      </section>
     </div>
   </form>
 </dialog>

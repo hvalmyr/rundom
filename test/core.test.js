@@ -217,14 +217,14 @@ test('rope edit: the re-fitted ring goes through the pulled point and stays clos
 });
 
 /* Синтетический файл района: две улицы по 200 м, объект и парк. */
-function districtFile() {
+function districtFile(secondName = 'Узкая') {
   const o = [5575000, 3760000], Q = 1e5;
   const line = (a, b, c, d) => [Math.round(a * Q) - o[0], Math.round(b * Q) - o[1], Math.round((c - a) * Q), Math.round((d - b) * Q)];
   return {
     id: 1, n: 'Тест', v: 7, o,
     s: [
       { n: 'Широкая', t: 35, c: [line(55.751, 37.601, 55.751, 37.6042)] }, /* ≈200 м на восток */
-      { c: [line(55.753, 37.601, 55.753, 37.6042)] }
+      { n: secondName, c: [line(55.753, 37.601, 55.753, 37.6042)] }
     ],
     ob: [{ n: 'Памятник', c: 'monument', p: [Math.round(55.7512 * Q) - o[0], Math.round(37.6025 * Q) - o[1]], s: 'Широкая' }],
     pk: [{ n: 'Сквер', ha: 2, r: [[Math.round(55.7525 * Q) - o[0], Math.round(37.6015 * Q) - o[1], 100, 0, 0, 200, -100, 0, 0, -200]] }]
@@ -236,10 +236,10 @@ test('coverage: segments count when the track runs within the street tolerance',
   assert.equal(dist.streets.length, 2);
   assert.ok(Math.abs(dist.total - 400) < 10, 'total ' + dist.total);
   assert.equal(dist.segLen.length, 16, '25 m segments');
-  /* по дальнему тротуару в 30 м от оси: широкая улица засчитана, безымянная — нет */
+  /* по дальнему тротуару в 30 м от оси: широкая улица засчитана, узкая — нет */
   const track = [[[55.75127, 37.6008], [55.75127, 37.6044]]];
   const r = Core.coverTrack(dist, track);
-  const st = Core.districtStats(dist, r.segs);
+  const st = Core.districtStats(dist, Core.coveredMap(r.segs));
   assert.ok(st.byStreet[0] > 190, 'wide street ' + st.byStreet[0]);
   assert.equal(st.byStreet[1], 0);
   assert.deepEqual(r.objs, [0]);
@@ -248,7 +248,7 @@ test('coverage: segments count when the track runs within the street tolerance',
   assert.equal(Core.coverTrack(dist, [[[55.7518, 37.6008], [55.7518, 37.6044]]]).segs.length, 0);
   /* половина улицы: засчитана только пройденная часть */
   const half = Core.coverTrack(dist, [[[55.753, 37.601], [55.753, 37.6026]]]);
-  const hs = Core.districtStats(dist, half.segs);
+  const hs = Core.districtStats(dist, Core.coveredMap(half.segs));
   assert.ok(hs.byStreet[1] > 80 && hs.byStreet[1] < 120, 'half ' + hs.byStreet[1]);
   /* по своей улице, но дальше 40 м от памятника: он был виден */
   const east = Core.coverTrack(dist, [[[55.75127, 37.6033], [55.75127, 37.6042]]]);
@@ -278,11 +278,11 @@ test('coverage: a track along the avenue does not count the first metres of cros
     ]
   });
   const r = Core.coverTrack(dist, [[[55.75127, 37.6008], [55.75127, 37.6044]]]);
-  const st = Core.districtStats(dist, r.segs);
+  const st = Core.districtStats(dist, Core.coveredMap(r.segs));
   assert.ok(st.byStreet[0] > 190, 'avenue ' + st.byStreet[0]);
   assert.equal(st.byStreet[1], 0, 'cross street stub');
   /* а пробежка по самой поперечной засчитывается */
-  const up = Core.districtStats(dist, Core.coverTrack(dist, [[[55.751, 37.60253], [55.7535, 37.60253]]]).segs);
+  const up = Core.districtStats(dist, Core.coveredMap(Core.coverTrack(dist, [[[55.751, 37.60253], [55.7535, 37.60253]]]).segs));
   assert.ok(up.byStreet[1] > 250, 'cross street ' + up.byStreet[1]);
 });
 
@@ -314,4 +314,109 @@ test('tilesInBox covers the box with grid tiles', () => {
   assert.equal(keys.length, (x1 - x0 + 1) * (y1 - y0 + 1));
   assert.ok(keys.length >= 4);
   assert.ok(keys.includes(Core.tileKey(...Core.tileOf(55.77, 37.63))));
+});
+
+test('share link round-trips a route', () => {
+  const coords = [[55.75, 37.6], [55.7512, 37.6031], [55.7544, 37.6102], [55.76, 37.62]];
+  const back = Core.parseShare('#' + Core.shareHash({ coords, name: 'Арбат · утро', loop: true }));
+  assert.equal(back.name, 'Арбат · утро');
+  assert.equal(back.loop, true);
+  assert.equal(back.coords.length, coords.length);
+  back.coords.forEach((p, i) => { assert.ok(Math.abs(p[0] - coords[i][0]) < 2e-5 && Math.abs(p[1] - coords[i][1]) < 2e-5); });
+  assert.equal(Core.parseShare('#r=&n=x'), null);
+  assert.equal(Core.parseShare(''), null);
+});
+
+test('districts: a long strict ring fits a small district when repeats are allowed', () => {
+  const g = Core.buildGraph(Core.parseNetwork(gridNetwork(30)), {});
+  Core.applyContext(g, { parks: [], pois: [] });
+  const A = Core.nearestNode(g, 55.7635, 37.608, 200, 10).node;
+  const small = [{ n: 'Тесный', p: [[[[55.759, 37.6], [55.759, 37.616], [55.767, 37.616], [55.767, 37.6], [55.759, 37.6]]]] }];
+  const idx = Core.districtIndex(small);
+  const zones = [{ name: 'Тесный', test: idx.tests[0] }];
+  /* район примерно 0,9 × 0,9 км: кольцо 8 км целиком внутри возможно только с повторами улиц */
+  const gen = Core.createGenerator(g, { A, B: A, length: 8000, tol: 0.1, count: 3, seed: 5, maxAttempts: 200, noRepeat: false, districts: { zones, mode: 'one', strict: true } });
+  while (!gen.run(50));
+  const res = gen.results();
+  assert.ok(res.routes.length > 0, 'a route is found');
+  assert.ok(res.routes.some((r) => Math.abs(r.length - 8000) / 8000 <= 0.15), 'close to the requested length');
+});
+
+test('districts: strict ring sweeps the district streets, even with no-repeat on and a long distance', () => {
+  const g = Core.buildGraph(Core.parseNetwork(gridNetwork(30)), {});
+  Core.applyContext(g, { parks: [], pois: [] });
+  const A = Core.nearestNode(g, 55.7635, 37.608, 200, 10).node;
+  const small = [{ n: 'Тесный', p: [[[[55.759, 37.6], [55.759, 37.616], [55.767, 37.616], [55.767, 37.6], [55.759, 37.6]]]] }];
+  const idx = Core.districtIndex(small);
+  const zones = [{ name: 'Тесный', test: idx.tests[0] }];
+  const inside = (e) => idx.tests[0](g.X[g.eF[e]], g.Y[g.eF[e]]) && idx.tests[0](g.X[g.eT[e]], g.Y[g.eT[e]]);
+  let total = 0;
+  for (let e = 0; e < g.E; e++) if (inside(e)) total += g.eLen[e];
+  for (const L of [6000, 12000]) {
+    const gen = Core.createGenerator(g, { A, B: A, length: L, tol: 0.1, count: 3, seed: 11, maxAttempts: 120, noRepeat: true, districts: { zones, mode: 'one', strict: true } });
+    while (!gen.run(50));
+    const res = gen.results();
+    assert.ok(res.routes.length > 0, 'route for ' + L);
+    const r = res.routes[0], seen = new Set();
+    let got = 0;
+    for (const e of r.edges) if (inside(e) && !seen.has(e)) { seen.add(e); got += g.eLen[e]; }
+    assert.ok(got / Math.min(total, L) > 0.45, 'covers new streets: ' + Math.round(got) + ' of ' + Math.round(total) + ' at ' + L);
+  }
+});
+
+test('coverage: a two-way street counts both sides, one side is half, a one-way street is one line', () => {
+  const file = districtFile();
+  file.s[0].b = 0; /* «Широкая» двусторонняя: все её линии, начиная с нулевой */
+  const dist = Core.decodeDistrict(file);
+  const run = (lat, lon0 = 37.6008) => Core.coveredMap(Core.coverTrack(dist, [[[lat, lon0], [lat, 37.6044]]]).segs);
+  const stats = (m) => Core.districtStats(dist, m);
+  /* ось улицы — 55.751; север — слева от направления на восток */
+  const north = stats(run(55.75118)), south = stats(run(55.75082)), axis = stats(run(55.751));
+  assert.ok(north.byStreet[0] > 90 && north.byStreet[0] < 110, 'one side is half: ' + north.byStreet[0]);
+  assert.ok(south.byStreet[0] > 90 && south.byStreet[0] < 110, 'other side is half: ' + south.byStreet[0]);
+  assert.ok(axis.byStreet[0] > 190, 'along the axis both sides: ' + axis.byStreet[0]);
+  const both = stats(Core.coveredMap([...Core.coverTrack(dist, [[[55.75118, 37.6008], [55.75118, 37.6044]]]).segs,
+    ...Core.coverTrack(dist, [[[55.75082, 37.6008], [55.75082, 37.6044]]]).segs]));
+  assert.ok(both.byStreet[0] > 190, 'both sides together are the whole street: ' + both.byStreet[0]);
+  /* односторонняя «Узкая»: любая сторона — вся улица */
+  const one = stats(Core.coveredMap(Core.coverTrack(dist, [[[55.75312, 37.601], [55.75312, 37.6042]]]).segs));
+  assert.ok(one.byStreet[1] > 190, 'one-way street: ' + one.byStreet[1]);
+});
+
+test('districts: the strict sweep covering the most streets comes first', () => {
+  const g = Core.buildGraph(Core.parseNetwork(gridNetwork(30)), {});
+  Core.applyContext(g, { parks: [], pois: [] });
+  const A = Core.nearestNode(g, 55.7635, 37.608, 200, 10).node;
+  const small = [{ n: 'Тесный', p: [[[[55.759, 37.6], [55.759, 37.616], [55.767, 37.616], [55.767, 37.6], [55.759, 37.6]]]] }];
+  const idx = Core.districtIndex(small);
+  const zones = [{ name: 'Тесный', test: idx.tests[0] }];
+  const gen = Core.createGenerator(g, { A, B: A, length: 5000, tol: 0.1, count: 4, seed: 2, maxAttempts: 150, districts: { zones, mode: 'one', strict: true } });
+  while (!gen.run(50));
+  const covers = gen.results().routes.filter((r) => !r.off).map((r) => r.sweepCover);
+  assert.ok(covers.length > 1 && covers.every((c) => c > 0));
+  assert.ok(covers[0] >= Math.max(...covers) - 1e-6, 'best cover first: ' + covers.join(', '));
+});
+
+test('closing a street also closes its parallel sidewalk, a small zone catches a long edge', () => {
+  /* две параллельные улицы в 12 м друг от друга, соединённые поперечными дорожками по краям и посередине */
+  const lon = (m) => 37.6 + m / (111320 * Math.cos(55.75 * Math.PI / 180));
+  const lat = (m) => 55.75 + m / 111320;
+  const els = [];
+  const node = (id, x, y) => els.push({ type: 'node', id, lat: lat(y), lon: lon(x) });
+  [0, 100, 200, 300].forEach((x, i) => { node(i + 1, x, 0); node(i + 11, x, 12); });
+  els.push({ type: 'way', id: 1, tags: { highway: 'residential', name: 'Улица' }, nodes: [1, 2, 3, 4] });
+  els.push({ type: 'way', id: 2, tags: { highway: 'footway', footway: 'sidewalk' }, nodes: [11, 12, 13, 14] });
+  els.push({ type: 'way', id: 3, tags: { highway: 'footway' }, nodes: [1, 11] });
+  els.push({ type: 'way', id: 4, tags: { highway: 'footway' }, nodes: [4, 14] });
+  const g = Core.buildGraph(Core.parseNetwork({ elements: els }), {});
+  Core.applyContext(g, { parks: [], pois: [] });
+  const n = (x, y) => Core.nearestNode(g, lat(y), lon(x), 5).node;
+  const a = n(0, 0), b = n(300, 0);
+  const blocked = Core.applyBlocks(g, { segments: [{ a: [g.lat[a], g.lon[a]], b: [g.lat[b], g.lon[b]] }] });
+  /* ось (3 ребра) и тротуар (3 ребра) */
+  assert.ok(blocked >= 6, 'sidewalk is closed with the street: ' + blocked);
+  /* маленькая зона посередине длинного ребра без узлов внутри */
+  const g2 = Core.buildGraph(Core.parseNetwork({ elements: els }), {});
+  const ring = [[lat(-3), lon(145)], [lat(-3), lon(155)], [lat(3), lon(155)], [lat(3), lon(145)]];
+  assert.ok(Core.applyBlocks(g2, { zones: [{ shape: 'poly', ring }] }) >= 1, 'zone on a long edge');
 });

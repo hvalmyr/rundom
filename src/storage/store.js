@@ -11,10 +11,10 @@ const DEFAULTS = {
   /* места, отмеченные «исследовал»: ключ «район|тип|название» → время отметки */
   visited: {},
   prefs: {
-    km: 10, kmPresets: [5, 10, 15, 21.1], tol: 0.08, tolSign: 'both', loop: true,
+    routeKind: 'auto', km: 10, kmPresets: [5, 10, 15, 21.1], tol: 0.08, tolSign: 'both', loop: true,
     startMode: 'home', approachMax: 1000, allowRepeats: false,
     dirMode: 'any', dirBearing: 0, dirSpread: 30, districts: [], distStrict: false, distMulti: 'one',
-    main: 60, appeal: 40, novelty: 0, poi: 50, avoidSteps: true, strictGates: false, kmStep: 1, pace: '6:00'
+    main: 60, appeal: 40, novelty: 0, poi: 50, strictGates: false, kmStep: 1, pace: '6:00'
   },
   /* v — версия набора слоёв: со 2-й закрытые проходы по умолчанию выключены */
   layers: { explored: true, places: true, gates: false, osm: false, covPlaces: true, covStreets: true, covToolsOpen: false, covList: 'districts', legendOpen: false, v: 2 },

@@ -4,7 +4,7 @@
 import { isSignalNode } from './osm.js';
 
 var E6 = 1e6;
-var WAY_KEYS = ['highway', 'name', 'foot', 'access', 'footway', 'crossing', 'crossing:signals', 'service', 'surface', 'tracktype', 'indoor'];
+var WAY_KEYS = ['highway', 'name', 'foot', 'access', 'footway', 'crossing', 'crossing:signals', 'service', 'surface', 'tracktype', 'indoor', 'tunnel', 'level'];
 /* теги узлов: ворота и заборы, светофоры и регулируемые переходы */
 var NODE_KEYS = ['barrier', 'foot', 'access', 'locked', 'name', 'highway', 'crossing', 'crossing:signals'];
 var keptNode = function (t) { return !!(t && (t.barrier || isSignalNode(t))); };

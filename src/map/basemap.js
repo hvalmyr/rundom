@@ -4,7 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { setWorkerUrl, addProtocol } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
-import { vectorPalette, vectorStyle, linesGeoJSON, overlaySource } from './vector-style.js';
+import { vectorPalette, vectorStyle, linesGeoJSON, polysGeoJSON, overlaySource } from './vector-style.js';
 import { pmtilesProtocol, pmtilesSource } from './pmtiles.js';
 
 /* MapLibre ищет воркер рядом со своим модулем, а Vite его оттуда переносит: путь задаём явно. */
@@ -24,7 +24,7 @@ const fontsReady = document.fonts
 export async function createBasemap(map, st, { cssVar, onError }) {
   const [rd] = await Promise.all([pmtilesSource(TILES), fontsReady]);
   const style = () => vectorStyle(vectorPalette(cssVar), rd, st);
-  const layer = maplibreGL({ style: style(), interactive: false });
+  const layer = maplibreGL({ style: style(), interactive: false, padding: 0.3 });
   layer.addTo(map);
   const gl = layer.getMaplibreMap();
   gl.on('error', (e) => { console.warn(e.error); onError(); });
@@ -38,6 +38,9 @@ export async function createBasemap(map, st, { cssVar, onError }) {
     data(id) {
       const src = overlaySource(id);
       when(() => gl.getSource(src), () => gl.getSource(src).setData(linesGeoJSON(st.data[id])));
+    },
+    polys(id) {
+      when(() => gl.getSource('rd-' + id), () => gl.getSource('rd-' + id).setData(polysGeoJSON(st.polys[id])));
     },
     paint(layerId, prop, value) { when(() => gl.getLayer(layerId), () => gl.setPaintProperty(layerId, prop, value)); },
     visible(layerId, on) { when(() => gl.getLayer(layerId), () => gl.setLayoutProperty(layerId, 'visibility', on ? 'visible' : 'none')); },

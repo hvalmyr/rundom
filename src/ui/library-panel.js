@@ -4,6 +4,7 @@ import * as Core from '../core/index.js';
 import { cssVar, divIcon } from '../map/map.js';
 import { $, el, fmtKm, uid, round5, toast, renameable, iconBtn, removeBtn, download } from './dom.js';
 import { ui } from '../storage/session.js';
+import { store } from '../storage/store.js';
 
 const KIND = { gpx: 'GPX', route: 'маршрут', manual: 'вручную' };
 const fmtDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
@@ -18,6 +19,34 @@ export function initLibraryPanel(app) {
     if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
   }
 
+  /* Пробежки, выбранные нажатием на карту: если под пальцем прошло несколько, в списке остаются только они. */
+  let picked = null;
+  function pickAt(ll) {
+    const pt = map.latLngToLayerPoint(ll), r = 10;
+    return tracks.items.filter((t) => t.lines.some((line) => {
+      for (let i = 1; i < line.length; i++) {
+        const a = map.latLngToLayerPoint(line[i - 1]), b = map.latLngToLayerPoint(line[i]);
+        if (L.LineUtil.pointToSegmentDistance(pt, a, b) <= r) return true;
+      }
+      return false;
+    }));
+  }
+  map.on('click', (e) => {
+    if (app.tab !== 'library' || S.mode || !store.layers.explored) return;
+    const hit = pickAt(e.latlng);
+    if (!hit.length) { if (picked) { picked = null; renderTracks(); } return; }
+    picked = hit.length > 1 ? hit.map((t) => t.id) : null;
+    if (hit.length === 1) { app.showLine({ lines: hit[0].lines }, hit[0].id, false); }
+    renderFavorites(); renderTracks();
+    app.sheet.open();
+    const rowEl = document.querySelector('#exploredList .item.on') || $('#exploredList');
+    rowEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+  map.on('mousemove', (e) => {
+    if (app.tab !== 'library' || S.mode || !store.layers.explored) return;
+    map.getContainer().classList.toggle('pick-alt', pickAt(e.latlng).length > 0);
+  });
+
   const renameIn = (entry, coll) => renameable(entry.name, (v) => { entry.name = v; entry.autoName = false; coll.update(entry); });
 
   /* Кружок слева показывает маршрут или пробежку на карте кармином; виден один, повторное нажатие убирает. */
@@ -25,6 +54,15 @@ export function initLibraryPanel(app) {
     if (S.lineId === f.id) app.hideLine();
     else { app.showLine(shape, f.id); app.sheet.peek(); }
     renderFavorites(); renderTracks();
+  }
+
+  /* показ пробега: линия встаёт на карту и по ней идёт точка */
+  function playBtn(f, lines) {
+    if (app.replayKey() === f.id) return iconBtn('stop', 'Остановить показ', () => app.replayStop(), true);
+    return iconBtn('play', 'Показать, как проходит путь', () => {
+      if (S.lineId !== f.id) { app.showLine(f.lines ? { lines: f.lines } : f, f.id, true); app.sheet.peek(); }
+      app.replay(lines, f.id);
+    }, true);
   }
 
   /* Строка списка: кружок показа, имя и сводка в одну строку, иконки действий. Избранное и пробежки — одинаково. */
@@ -50,8 +88,10 @@ export function initLibraryPanel(app) {
 
   function renderFavorites() {
     const items = favorites.items.slice().reverse();
-    fill($('#favList'), 'fav', items.map((f) => row(f, favorites, f, fmtKm(f.length) + ' км · ' + fmtDate(f.created), [
+    fill($('#favList'), 'fav', items.map((f) => row(f, favorites, f, fmtKm(f.length) + ' км · ' + fmtDate(f.created) + (f.custom ? ' · свой маршрут' : ''), [
       iconBtn('download', 'Скачать GPX', () => app.downloadRoute(f.name, f.coords, f.length, f.loop), true),
+      iconBtn('share', 'Поделиться маршрутом', () => app.shareRoute(f), true),
+      playBtn(f, [f.coords]),
       removeBtn('Удалить ' + f.name, () => {
         if (S.lineId === f.id) app.hideLine();
         favorites.remove(f.id); render(); app.emit('favorites');
@@ -63,13 +103,17 @@ export function initLibraryPanel(app) {
 
   function renderTracks() {
     app.gl.lines('explored', tracks.items.flatMap((t) => t.lines));
-    const items = tracks.items.slice().sort((a, b) => (b.date || b.created) - (a.date || a.created));
-    fill($('#exploredList'), 'tracks', items.map((t) => {
+    if (picked) picked = picked.filter((id) => tracks.items.some((t) => t.id === id));
+    if (picked && !picked.length) picked = null;
+    const items = tracks.items.filter((t) => !picked || picked.includes(t.id)).sort((a, b) => (b.date || b.created) - (a.date || a.created));
+    const list = $('#exploredList');
+    fill(list, 'tracks', items.map((t) => {
       const meta = [fmtKm(t.km || 0) + ' км'];
       if (t.newKm !== undefined) meta.push('+' + fmtKm(t.newKm) + ' новых');
       if (KIND[t.kind]) meta.push(KIND[t.kind]);
       return row(t, tracks, { lines: t.lines }, meta.join(' · '), [
         iconBtn('download', 'Скачать GPX', () => exportTracks([t], t.name), true),
+        playBtn(t, t.lines),
         removeBtn('Удалить ' + t.name, () => {
           if (S.lineId === t.id) app.hideLine();
           tracks.remove(t.id); render();
@@ -77,6 +121,11 @@ export function initLibraryPanel(app) {
         })
       ]);
     }), 'Загрузите GPX своих пробежек или отметьте улицы вручную.');
+    if (picked) {
+      list.prepend(el('div', { class: 'picked-bar' },
+        el('span', null, 'На карте здесь проходили: ' + items.length),
+        el('button', { class: 'btn small ghost', type: 'button', onclick: () => { picked = null; renderTracks(); } }, 'Показать все')));
+    }
     $('#trackCount').textContent = tracks.items.length || '';
     $('#exportTracks').hidden = !tracks.items.length;
   }
@@ -235,6 +284,7 @@ export function initLibraryPanel(app) {
 
   app.on('theme', renderTracks);
   app.on('favorites', renderFavorites);
+  app.on('replay', () => { renderFavorites(); renderTracks(); });
   app.on('lineShown', () => { renderFavorites(); renderTracks(); });
   /* показанный на карте маршрут или пробежка — снова на карте, без перелёта к ним */
   const f = ui.lineId && (favorites.items.find((x) => x.id === ui.lineId) || tracks.items.find((x) => x.id === ui.lineId));

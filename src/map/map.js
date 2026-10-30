@@ -15,8 +15,42 @@ export function divIcon(cls, w, h, html) {
 }
 
 export function createMap() {
-  const map = L.map('map', { zoomControl: true, preferCanvas: true, zoomSnap: 0.5 })
+  /* Масштаб ограничен: ближе 18 карты нет, дальше 11 район уже не разобрать.
+     Масштабирование — своё, непрерывное: колесо, кнопки и двойной щелчок ведут масштаб к цели кадр за кадром,
+     а векторная карта перерисовывается на каждом кадре (как в Яндекс Картах), без отложенной анимации Leaflet.
+     Холст векторной карты шире окна на треть с каждой стороны: при сдвиге по краям не видно пустоты. */
+  const map = L.map('map', {
+    zoomControl: true, preferCanvas: true, zoomSnap: 0, zoomDelta: 0.5, zoomAnimation: false, markerZoomAnimation: false,
+    scrollWheelZoom: false, doubleClickZoom: false, minZoom: 11, maxZoom: 18
+  })
     .setView([store.view.lat, store.view.lon], store.view.z);
+  {
+    let target = null, anchor = null, raf = 0, last = 0;
+    const clamp = (z) => Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), z));
+    const tick = (now) => {
+      const dt = Math.min(64, now - last); last = now;
+      const cur = map.getZoom(), d = target - cur;
+      if (Math.abs(d) < 0.004) { map.setZoomAround(anchor, target, { animate: false }); raf = 0; target = null; return; }
+      /* к цели примерно за 0,2 с: быстро в начале, мягко в конце */
+      map.setZoomAround(anchor, cur + d * (1 - Math.exp(-dt / 70)), { animate: false });
+      raf = requestAnimationFrame(tick);
+    };
+    /* delta — на сколько уровней; point — точка окна, которая остаётся на месте (по умолчанию центр) */
+    const zoomBy = (delta, point) => {
+      target = clamp((target === null ? map.getZoom() : target) + delta);
+      anchor = point || map.getSize().divideBy(2);
+      if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
+    };
+    map.getContainer().addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const px = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1);
+      /* одно деление мыши (≈100) — полуровня; щипок на трекпаде (ctrl) чувствительнее */
+      zoomBy(Math.max(-1, Math.min(1, -px / (e.ctrlKey ? 60 : 200))), map.mouseEventToContainerPoint(e));
+    }, { passive: false });
+    map.zoomIn = (d) => { zoomBy(d || map.options.zoomDelta); return map; };
+    map.zoomOut = (d) => { zoomBy(-(d || map.options.zoomDelta)); return map; };
+    map.on('dblclick', (e) => zoomBy(e.originalEvent.shiftKey ? -1 : 1, e.containerPoint));
+  }
   L.control.scale({ imperial: false }).addTo(map);
   /* ссылка на Leaflet без флага, который Leaflet 1.9 ставит по умолчанию */
   map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
@@ -24,11 +58,13 @@ export function createMap() {
 
   /* Векторная карта: подложка, линии приложения и подписи в одной карте MapLibre.
      Пока она грузится, фасад gl копит линии и правки, потом отдаёт их ей. */
-  const st = { data: {}, paint: {}, hidden: {} };
+  const st = { data: {}, polys: {}, paint: {}, hidden: {} };
   let impl = null, tileErrors = 0;
   const gl = {
     /* линии слоя: массив линий [[lat, lon], ...] */
     lines(id, lines) { st.data[id] = lines; impl?.data(id); },
+    /* заливки: массив многоугольников, у каждого первый круг — контур, остальные — дыры */
+    polys(id, polys) { st.polys[id] = polys; impl?.polys(id); },
     paint(layerId, prop, value) { (st.paint[layerId] ||= {})[prop] = value; impl?.paint(layerId, prop, value); },
     visible(layerId, on) { st.hidden[layerId] = !on; impl?.visible(layerId, on); },
     pick(layerId, latlng, r) { return impl ? impl.pick(layerId, latlng, r) : null; }

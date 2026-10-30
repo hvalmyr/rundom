@@ -33,7 +33,11 @@ export function vectorPalette(v) {
     explored: v('map-explored'),
     route: v('map-route'),
     alt: v('ink-muted'),
-    paper: v('paper')
+    paper: v('paper'),
+    ink: v('ink'),
+    inkMuted: v('ink-muted'),
+    carmine: v('carmine'),
+    carmineStrong: v('carmine-strong')
   };
 }
 
@@ -114,15 +118,23 @@ function baseLayers(c) {
   ];
 }
 
+/* Градиент маршрута: от бледного старта (0%) к насыщенному финишу (100%) — на развилках видно, куда дальше.
+   Нужен источник с lineMetrics. hex — цвет линии в виде #rrggbb (иначе без градиента). */
+export function routeGradient(hex, flat = false) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex).trim());
+  const to = hex, from = m && !flat ? `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, 0.28)` : hex;
+  return ['interpolate', ['linear'], ['line-progress'], 0, from, 1, to];
+}
+
 /* Линии приложения. Источник у каждой свой, данные задаёт приложение (ov.data). */
-export const OVERLAYS = ['explored', 'alt', 'approach', 'route-halo', 'route'];
+export const OVERLAYS = ['explored', 'alt', 'approach', 'route-halo', 'route', 'cov-off', 'cov-on', 'cov-left', 'cov-right', 'cov-mkad'];
 const OVERLAY_SOURCE = { 'route-halo': 'route' };
 export const overlaySource = (id) => 'rd-' + (OVERLAY_SOURCE[id] || id);
 
 function overlayLayers(c) {
-  const line = (id, paint) => ({
+  const line = (id, paint, layout = {}) => ({
     id, type: 'line', source: overlaySource(id),
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    layout: { 'line-cap': 'round', 'line-join': 'round', ...layout },
     paint
   });
   return [
@@ -131,8 +143,56 @@ function overlayLayers(c) {
     /* подводка — цепочка точек: штрих почти нулевой длины с круглыми концами */
     line('approach', { 'line-color': c.route, 'line-width': 3.5, 'line-dasharray': [0.01, 2] }),
     line('route-halo', { 'line-color': c.paper, 'line-width': 9 }),
-    line('route', { 'line-color': c.route, 'line-width': 5 })
+    line('route', { 'line-color': c.route, 'line-width': 5, 'line-gradient': routeGradient(c.route) })
   ];
+}
+
+/* Вкладка «Прогресс» целиком рисуется внутри карты: маска за МКАД, заливки и границы районов, пройденные улицы,
+   затемнение вокруг выбранного района. Всё двигается и масштабируется вместе с картой, а не перерисовывается
+   поверх. Лежит над подписями; по умолчанию скрыто (приложение включает, пока открыта вкладка). */
+export const POLYS = ['cov-mask', 'cov-mute', 'cov-fill', 'cov-hot', 'cov-dim'];
+const polysSource = (id) => 'rd-' + id;
+function covLayers(c) {
+  const off = { visibility: 'none' };
+  const fill = (id, source, paint) => ({ id, type: 'fill', source: polysSource(source), layout: off, paint: { 'fill-antialias': false, ...paint } });
+  const flat = (id, o) => fill(id, id, { 'fill-color': c.paper, 'fill-opacity': o });
+  /* районы: цвет границы — по свойству k (0 — кармин, 1 — серый, 2 — выбранный), прозрачность и толщина — b и w */
+  const tint = (id) => fill(id, id, { 'fill-color': c.carmine, 'fill-opacity': ['get', 'o'] });
+  const border = (id, source) => ({
+    id, type: 'line', source: polysSource(source), layout: { ...off, 'line-join': 'round' },
+    paint: { 'line-color': ['match', ['get', 'k'], 1, c.inkMuted, 2, c.carmineStrong, c.carmine], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 9, ['*', ['get', 'b'], 0.45], 12, ['get', 'b']],
+      /* при отдалении границы тоньше: сотня районов не должна сливаться в тёмную сетку */
+      'line-width': ['interpolate', ['linear'], ['zoom'], 8, ['*', ['get', 'w'], 0.35], 11, ['*', ['get', 'w'], 0.6], 14, ['get', 'w']] }
+  });
+  const line = (cid, paint) => ({ id: cid, type: 'line', source: overlaySource(cid), layout: { ...off, 'line-cap': 'round', 'line-join': 'round' }, paint });
+  return [
+    flat('cov-mute', 0.72),
+    tint('cov-fill'), border('cov-fill-line', 'cov-fill'),
+    line('cov-off', { 'line-color': c.inkMuted, 'line-width': 1, 'line-opacity': 0.6 }),
+    line('cov-on', { 'line-color': c.ink, 'line-width': 2.4, 'line-opacity': 0.95 }),
+    /* пройдена одна сторона двусторонней улицы: линия сбоку от оси, тоньше */
+    line('cov-left', { 'line-color': c.ink, 'line-width': 1.6, 'line-opacity': 0.95, 'line-offset': -1.6 }),
+    line('cov-right', { 'line-color': c.ink, 'line-width': 1.6, 'line-opacity': 0.95, 'line-offset': 1.6 }),
+    line('cov-mkad', { 'line-color': c.ink, 'line-width': 1.6, 'line-opacity': 0.7 }),
+    tint('cov-hot'), border('cov-hot-line', 'cov-hot'),
+    flat('cov-dim', 0.6),
+    flat('cov-mask', 0.9)
+  ];
+}
+
+/* Многоугольники → GeoJSON. Каждый — круги [[lat, lon], ...] (первый — контур, остальные — дыры)
+   или {rings, p: свойства}. */
+export function polysGeoJSON(polys) {
+  return {
+    type: 'FeatureCollection',
+    features: (polys || []).map((it) => {
+      const rings = Array.isArray(it) ? it : it.rings;
+      return {
+        type: 'Feature', properties: Array.isArray(it) ? {} : it.p || {},
+        geometry: { type: 'Polygon', coordinates: rings.map((r) => r.map((p) => [p[1], p[0]])) }
+      };
+    })
+  };
 }
 
 function labelLayers(c) {
@@ -192,11 +252,13 @@ export function linesGeoJSON(lines) {
    ov: { data: {id: lines}, paint: {layerId: {prop: value}}, hidden: {layerId: true} } */
 export function vectorStyle(c, rd, ov) {
   const sources = { rd };
-  for (const id of OVERLAYS) sources[overlaySource(id)] ||= { type: 'geojson', data: linesGeoJSON(ov.data[overlaySource(id).slice(3)]) };
-  const layers = [...baseLayers(c), ...overlayLayers(c), ...labelLayers(c)];
+  for (const id of OVERLAYS) sources[overlaySource(id)] ||= { type: 'geojson', data: linesGeoJSON(ov.data[overlaySource(id).slice(3)]), lineMetrics: overlaySource(id) === 'rd-route' };
+  for (const id of POLYS) sources[polysSource(id)] = { type: 'geojson', data: polysGeoJSON((ov.polys || {})[id]) };
+  const layers = [...baseLayers(c), ...overlayLayers(c), ...labelLayers(c), ...covLayers(c)];
   for (const l of layers) {
     Object.assign(l.paint ||= {}, ov.paint[l.id]);
     if (ov.hidden[l.id]) (l.layout ||= {}).visibility = 'none';
+    else if (ov.hidden[l.id] === false && l.layout && l.layout.visibility) l.layout.visibility = 'visible';
   }
   return { version: 8, sources, layers };
 }

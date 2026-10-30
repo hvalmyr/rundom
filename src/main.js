@@ -11,6 +11,8 @@ import { $, toast, uid, smoothDetails } from './ui/dom.js';
 import { initModes } from './ui/modes.js';
 import { initSheet } from './ui/sheet.js';
 import { initRoutePanel } from './ui/route-panel.js';
+import { initReplay } from './ui/replay.js';
+import { initCustomRoute } from './ui/custom-route.js';
 import { initHome } from './ui/home.js';
 import { initBlocks } from './ui/blocks.js';
 import { initGates } from './ui/gates.js';
@@ -90,6 +92,7 @@ $('#mtToggle').addEventListener('click', () => { store.layers.legendOpen = !stor
 syncLegend();
 
 initSheet(app);
+initReplay(app);
 smoothDetails();
 initModes(app);
 initHome(app);
@@ -97,6 +100,7 @@ initBlocks(app);
 initGates(app);
 initDirection(app);
 initRoutePanel(app);
+initCustomRoute(app);
 initRope(app);
 initCoverage(app);
 initLibraryPanel(app);
@@ -119,6 +123,8 @@ $('#panel').addEventListener('scroll', () => {
   clearTimeout(scrollTimer);
   scrollTimer = setTimeout(() => { (ui.scroll ||= {})[app.tab] = $('#panel').scrollTop; saveUi(); }, 200);
 }, { passive: true });
+/* ссылка на маршрут открывает вкладку «Маршрут» */
+if (app.sharedOpened) { ui.tab = 'route'; }
 const scrollWas = (ui.scroll || {})[ui.tab || 'route'] || 0;
 if (ui.tab && ui.tab !== 'route' && TABS.includes(ui.tab)) {
   const sheet = ui.sheet;

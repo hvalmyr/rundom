@@ -4,7 +4,8 @@ import * as Core from '../core/index.js';
 import { store, save } from '../storage/store.js';
 import { ui, saveUi } from '../storage/session.js';
 import { loadStreets } from '../data/streets.js';
-import { divIcon } from '../map/map.js';
+import { divIcon, cssVar } from '../map/map.js';
+import { routeGradient } from '../map/vector-style.js';
 import { $, el, tick, fmtKm, fmtNum, fmtTime, toast, download, syncSeg, uid, ICON, userMessage } from './dom.js';
 
 export function initRoutePanel(app) {
@@ -201,7 +202,7 @@ export function initRoutePanel(app) {
     syncTol();
     $('#loop').checked = p.loop; $('#fieldB').hidden = p.loop;
     $('#prefMain').value = p.main; $('#prefAppeal').value = p.appeal; $('#prefNovelty').value = p.novelty; $('#prefPoi').value = p.poi;
-    $('#avoidSteps').checked = p.avoidSteps; $('#allowRepeats').checked = p.allowRepeats; $('#strictGates').checked = p.strictGates;
+    $('#allowRepeats').checked = p.allowRepeats; $('#strictGates').checked = p.strictGates;
     $('#kmStep').value = String(Math.round(p.kmStep * 1000)); $('#pace').value = fmtPace(paceSec());
     outputs();
   }
@@ -242,7 +243,6 @@ export function initRoutePanel(app) {
   bindPref('#prefAppeal', 'appeal', int);
   bindPref('#prefNovelty', 'novelty', int);
   bindPref('#prefPoi', 'poi', int);
-  bindPref('#avoidSteps', 'avoidSteps');
   bindPref('#allowRepeats', 'allowRepeats');
   bindPref('#strictGates', 'strictGates');
   $('#tolSeg').addEventListener('click', (e) => {
@@ -322,6 +322,30 @@ export function initRoutePanel(app) {
     return { parks: ctx.parks, pois };
   }
 
+  /* Улицы и граф вокруг точек для «своего маршрута»: то же, что в начале generate(), без хода построения. */
+  async function ensureGraph(need, signal) {
+    const prefs = store.prefs;
+    if (!S.net || !Core.regionContains(S.net.region, need)) {
+      const got = await loadStreets(need, signal, say);
+      if (!got.parsed.ways.length) throw new Error('В этой зоне не нашлось улиц.');
+      S.net = { region: need, parsed: got.parsed, ctx: got.ctx };
+      S.graph = null;
+    }
+    const key = JSON.stringify([prefs.strictGates, store.openGates.map((o) => [o.lat, o.lon])]);
+    if (!S.graph || S.graphKey !== key) {
+      await tick();
+      S.graph = Core.buildGraph(S.net.parsed, { strictGates: prefs.strictGates, openGates: store.openGates });
+      S.graphKey = key; S.router = null;
+    }
+    const g = S.graph;
+    Core.applyContext(g, contextForGraph());
+    Core.applyExplored(g, app.tracks.items.flatMap((t) => t.lines));
+    Core.applyBlocks(g, app.blocksSpec());
+    app.snapBlocks();
+    app.emit('graph');
+    return g;
+  }
+
   async function generate() {
     if (S.busy) return;
     const prefs = store.prefs, fromHome = prefs.startMode === 'home';
@@ -357,10 +381,10 @@ export function initRoutePanel(app) {
         if (R >= 5000 && Lm / 2.5 > 5000) toast('Для такой длины зона ограничена радиусом 5 км. Маршруты могут получиться короче.');
       }
       braid(0.25);
-      const key = JSON.stringify([prefs.avoidSteps, prefs.strictGates, store.openGates.map((o) => [o.lat, o.lon])]);
+      const key = JSON.stringify([prefs.strictGates, store.openGates.map((o) => [o.lat, o.lon])]);
       if (!S.graph || S.graphKey !== key) {
         say('Готовлю карту улиц…'); await tick();
-        S.graph = Core.buildGraph(S.net.parsed, { avoidSteps: prefs.avoidSteps, strictGates: prefs.strictGates, openGates: store.openGates });
+        S.graph = Core.buildGraph(S.net.parsed, { strictGates: prefs.strictGates, openGates: store.openGates });
         S.graphKey = key; S.router = null;
       }
       const g = S.graph;
@@ -475,7 +499,7 @@ export function initRoutePanel(app) {
     }
     if (gen.state.error === 'exits') throw new Error('От выходов из дома некуда начать кольцо. Увеличьте предел подводки или проверьте зоны рядом с домом.');
     if (gen.state.error) throw new Error('В зоне слишком мало улиц для такой длины. Уменьшите дистанцию или сдвиньте старт.');
-    while (!gen.run(35)) {
+    while (!gen.run(12)) {
       const pr = gen.progress();
       braid(from + (1 - from) * pr.attempts / pr.max);
       say('Плету маршруты: ' + pr.attempts + ' из ' + pr.max + ', подходящих ' + pr.accepted);
@@ -510,7 +534,9 @@ export function initRoutePanel(app) {
     else {
       app.favorites.add({
         id: r.id, name: r.name, coords: r.coords, ringCoords: r.ringCoords, approachCoords: r.approachCoords, length: r.length, loop: r.loop,
-        newShare: r.metrics.newShare, created: Date.now()
+        newShare: r.metrics.newShare, created: Date.now(),
+        /* сделан пользователем: помечается в библиотеке */
+        custom: r.custom || undefined, pts: r.pts
       });
       toast('Маршрут сохранён в библиотеке.');
     }
@@ -518,12 +544,25 @@ export function initRoutePanel(app) {
     renderResults();
   }
 
+  /* ---------- ссылка на маршрут ---------- */
+  async function shareRoute(r) {
+    const url = location.origin + location.pathname + '#' + Core.shareHash(r);
+    const data = { title: r.name, text: r.name + ', ' + fmtKm(r.length) + ' км', url };
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      try { await navigator.share(data); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(url); toast('Ссылка на маршрут скопирована.'); }
+    catch (e) { prompt('Ссылка на маршрут:', url); }
+  }
+  app.shareRoute = shareRoute;
+  app.toggleFavorite = (r) => toggleFavorite(r);
+
   /* ---------- варианты ---------- */
   /* варианты переживают перезагрузку: без графа (правки «верёвкой» после неё недоступны до нового построения) */
   const r5 = (q) => [Math.round(q[0] * 1e5) / 1e5, Math.round(q[1] * 1e5) / 1e5];
   const slim = (r) => ({
     id: r.id, name: r.name, loop: r.loop, length: r.length, approach: r.approach, err: r.err, off: r.off, repeat: r.repeat,
-    dirOut: r.dirOut, edits: r.edits, coords: r.coords.map(r5),
+    dirOut: r.dirOut, sweepCover: r.sweepCover, edits: r.edits, custom: r.custom, legs: r.legs, pts: r.pts, coords: r.coords.map(r5),
     ringCoords: r.ringCoords && r.ringCoords.map(r5), approachCoords: r.approachCoords && r.approachCoords.map(r5),
     metrics: { ...r.metrics, pois: (r.metrics.pois || []).map((p) => ({ name: p.name, cat: p.cat })) }
   });
@@ -537,6 +576,7 @@ export function initRoutePanel(app) {
       const m = r.metrics, mins = (r.length / 1000) * paceMin();
       const notes = [];
       if (r.off) notes.push('Длина отличается от заданной на ' + Math.round(r.err * 100) + '%');
+      if (r.sweepCover) notes.push('Улиц района на маршруте: ' + fmtKm(r.sweepCover) + ' км');
       if (m.stepsLen > 0) notes.push('Есть лестницы: ' + Math.round(m.stepsLen) + ' м');
       if (r.dirOut) notes.push('Вне выбранного направления ' + Math.round(r.dirOut * 100) + '% пути: целиком в секторе кольцо не складывается');
       if (S.lastGen && S.lastGen.noRepeat && r.repeat > 60) notes.push('Повтор улиц: ' + Math.round(r.repeat / 10) * 10 + ' м');
@@ -561,6 +601,10 @@ export function initRoutePanel(app) {
         on ? el('div', { class: 'actions' },
           act('star', fav ? 'Убрать из избранного' : 'В избранное', () => toggleFavorite(r), { class: 'iconbtn star', 'aria-pressed': String(fav) }),
           act('download', 'Скачать GPX', () => downloadRoute(r.name, r.coords, r.length, r.loop)),
+          act('share', 'Поделиться маршрутом', () => shareRoute(r)),
+          app.replayKey() === r.id
+            ? act('stop', 'Остановить показ', () => app.replayStop(), { class: 'iconbtn playing' })
+            : act('play', 'Показать, как проходит путь', () => app.replay([r.coords], r.id)),
           edited ? act('undo', 'Отменить шаг', () => app.ropeUndo()) : null,
           edited ? act('reset', 'Сбросить правки', () => app.ropeReset()) : null) : null));
     });
@@ -616,6 +660,8 @@ export function initRoutePanel(app) {
   });
   /* r.lines — несколько линий без меток (пробежка из библиотеки) */
   function drawLine(r, fit) {
+    /* маршрут — градиент к финишу; пробежки из библиотеки — несколько линий, у них цвет ровный */
+    app.gl.paint('route', 'line-gradient', routeGradient(cssVar('map-route'), !!r.lines));
     if (r.lines) {
       app.gl.lines('route', r.lines);
       if (fit) map.fitBounds(L.latLngBounds(r.lines.flat()), { padding: [40, 40] });
@@ -634,6 +680,7 @@ export function initRoutePanel(app) {
   }
   /* Показать сохранённый маршрут: снимает выбор с текущих вариантов. id запоминается в S.lineId. */
   app.showLine = (r, id = null, fit = true) => {
+    if (S.sel >= 0) S.selKept = S.sel;
     S.sel = -1; renderResults();
     clearLines();
     altIdx.length = 0;
@@ -659,10 +706,19 @@ export function initRoutePanel(app) {
   app.downloadRoute = downloadRoute;
   /* в «Библиотеке» построенные варианты не мешают: убираются с карты и возвращаются на вкладке маршрута */
   app.on('tab', () => {
-    if (app.tab === 'library' && !S.lineId && S.routeLayers) app.hideLine();
-    else if (app.tab === 'route' && !S.lineId && !S.routeLayers && S.routes.length) drawRoutes(false);
+    if (app.tab === 'library') {
+      if (!S.lineId && S.routeLayers) { S.selKept = S.sel; app.hideLine(); }
+    } else if (app.tab === 'route') {
+      /* из библиотеки вернулись: показанная там линия уходит, построенные варианты встают как были */
+      if (S.lineId) app.hideLine();
+      if (!S.routeLayers && S.routes.length) {
+        if (S.sel < 0) S.sel = Math.min(S.selKept >= 0 ? S.selKept : 0, S.routes.length - 1);
+        renderResults(); drawRoutes(false);
+      }
+    }
   });
 
+  app.on('replay', renderResults);
   app.on('theme', () => drawRoutes(false));
   app.on('start', renderAB);
 
@@ -670,10 +726,29 @@ export function initRoutePanel(app) {
   if (store.A) $('#qA').value = store.A.label || coordText(store.A);
   if (store.B) $('#qB').value = store.B.label || coordText(store.B);
   app.generate = generate;
-  Object.assign(app, { say, setBusy, braid, runGenerator, renderResults, drawRoutes, fmtKm });
+  Object.assign(app, { say, setBusy, braid, runGenerator, renderResults, drawRoutes, fmtKm, ensureGraph });
 
+  /* ссылка на маршрут: он встаёт карточкой в результаты, со звездой, GPX и ссылкой */
+  function openShared() {
+    const shared = Core.parseShare(location.hash);
+    if (!shared) return false;
+    app.sharedOpened = true;
+    history.replaceState(null, '', location.pathname + location.search);
+    const m = { newShare: 0, pathShare: 0, parkShare: 0, crossings: 0, stepsLen: 0, pois: [] };
+    if (store.prefs.routeKind === 'custom') {
+      if (app.setKind) app.setKind('auto'); else { store.prefs.routeKind = 'auto'; save(); }
+    }
+    if (app.tab !== 'route') $('#tab-route').click();
+    S.routes = [{ id: uid(), name: shared.name, loop: shared.loop, length: shared.length, coords: shared.coords, ringCoords: shared.coords,
+      approachCoords: null, approach: 0, err: 0, off: false, repeat: 0, metrics: m, shared: true }];
+    S.sel = 0; S.lastGen = null;
+    renderResults(); drawRoutes(true);
+    say('Открыт маршрут по ссылке. Звезда сохранит его в библиотеку.');
+    return true;
+  }
+  window.addEventListener('hashchange', openShared);
   /* после перезагрузки — прежние варианты и выбранный из них */
-  if (ui.routes && ui.routes.length) {
+  if (openShared()) { /* маршрут из ссылки */ } else if (ui.routes && ui.routes.length) {
     S.routes = ui.routes;
     S.sel = Math.min(ui.sel ?? 0, S.routes.length - 1);
     renderResults();
